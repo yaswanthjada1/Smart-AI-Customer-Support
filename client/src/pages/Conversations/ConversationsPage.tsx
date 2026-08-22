@@ -1,13 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import {
   MessageSquare,
-  Clock,
   AlertTriangle,
   CheckCircle2,
   FileText,
   User,
   Bot,
-  Filter,
   RefreshCw,
   Loader2,
 } from 'lucide-react';
@@ -90,12 +88,12 @@ export const ConversationsPage: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white flex items-center gap-2.5">
-            <MessageSquare className="w-6 h-6 text-indigo-400" />
-            <span>Customer Conversations & Escalations</span>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900 flex items-center gap-2.5">
+            <MessageSquare className="w-6 h-6 text-indigo-600" />
+            <span>Customer Conversations</span>
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
-            Review live support sessions, inspect source citations, and manage human escalation requests.
+          <p className="text-xs text-slate-500 mt-1">
+            Review customer support sessions, verify citations, and resolve human escalation requests.
           </p>
         </div>
 
@@ -107,11 +105,11 @@ export const ConversationsPage: React.FC = () => {
               onClick={() => setStatusFilter(filter)}
               className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
                 statusFilter === filter
-                  ? 'bg-indigo-600 text-white shadow-md'
-                  : 'bg-slate-900 text-slate-400 hover:text-white border border-slate-800'
+                  ? 'bg-indigo-600 text-white shadow-2xs'
+                  : 'bg-white text-slate-600 hover:text-slate-900 border border-slate-200'
               }`}
             >
-              {filter === 'requested' ? '🚨 Escalated' : filter}
+              {filter === 'requested' ? '🚨 Escalated' : filter === 'none' ? 'Standard' : filter}
             </button>
           ))}
         </div>
@@ -120,52 +118,58 @@ export const ConversationsPage: React.FC = () => {
       {/* Main Split Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 h-[680px]">
         {/* Left: Conversation List (4 cols) */}
-        <div className="lg:col-span-4 glass-panel rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
-          <div className="p-4 border-b border-slate-800 flex items-center justify-between">
-            <span className="text-xs font-bold text-white uppercase tracking-wider">
+        <div className="lg:col-span-4 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
+          <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+            <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
               Inbox ({filtered.length})
             </span>
-            <button onClick={fetchConversations} className="p-1 text-slate-400 hover:text-white">
+            <button onClick={fetchConversations} className="p-1 text-slate-400 hover:text-slate-700">
               <RefreshCw className="w-3.5 h-3.5" />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/60">
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
             {loading ? (
               <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                 <span>Loading sessions...</span>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="p-8 text-center text-xs text-slate-400">No conversations found.</div>
+              <div className="p-8 text-center text-xs text-slate-500">
+                <MessageSquare className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="font-semibold text-slate-700">No conversations found</p>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Customer chats will appear here as they interact with your widget.
+                </p>
+              </div>
             ) : (
               filtered.map((c) => (
                 <div
                   key={c.id}
                   onClick={() => selectConversation(c)}
                   className={`p-4 cursor-pointer transition-colors ${
-                    selectedConv?.id === c.id ? 'bg-indigo-950/40 border-l-4 border-indigo-500' : 'hover:bg-slate-800/30'
+                    selectedConv?.id === c.id ? 'bg-indigo-50/60 border-l-4 border-indigo-600' : 'hover:bg-slate-50'
                   }`}
                 >
-                  <div className="flex items-center justify-between text-[11px] mb-1">
-                    <span className="font-semibold text-slate-200">
-                      {c.customer_identifier || `Guest (${c.session_id.substring(0, 10)})`}
+                  <div className="flex items-center justify-between text-xs mb-1">
+                    <span className="font-semibold text-slate-900">
+                      {c.customer_identifier || `Customer #${c.session_id.substring(0, 8)}`}
                     </span>
-                    <span className="text-slate-500 font-mono text-[10px]">
+                    <span className="text-slate-400 font-mono text-[10px]">
                       {new Date(c.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
-                  <p className="text-xs text-slate-400 line-clamp-1 mb-2">
+                  <p className="text-xs text-slate-500 line-clamp-1 mb-2">
                     {c.last_message || 'New conversation'}
                   </p>
                   <div className="flex items-center gap-2">
                     {c.escalation_status === 'requested' && (
-                      <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-300 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 text-[10px] font-bold">
                         Escalation Requested
                       </span>
                     )}
                     {c.escalation_status === 'resolved' && (
-                      <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10px] font-bold">
+                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
                         Resolved
                       </span>
                     )}
@@ -177,17 +181,17 @@ export const ConversationsPage: React.FC = () => {
         </div>
 
         {/* Right: Transcript Inspector (8 cols) */}
-        <div className="lg:col-span-8 glass-panel rounded-3xl border border-slate-800 flex flex-col overflow-hidden">
+        <div className="lg:col-span-8 bg-white rounded-2xl border border-slate-200 shadow-sm flex flex-col overflow-hidden">
           {selectedConv ? (
             <>
               {/* Header */}
-              <div className="p-4 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
+              <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <div className="font-bold text-xs text-white">
+                  <div className="font-bold text-xs text-slate-900">
                     Session: {selectedConv.session_id}
                   </div>
-                  <div className="text-[10px] text-slate-400">
-                    Created on {new Date(selectedConv.created_at).toLocaleString()}
+                  <div className="text-[10px] text-slate-500">
+                    Started on {new Date(selectedConv.created_at).toLocaleString()}
                   </div>
                 </div>
 
@@ -195,7 +199,7 @@ export const ConversationsPage: React.FC = () => {
                   {selectedConv.escalation_status === 'requested' ? (
                     <button
                       onClick={() => handleUpdateEscalation('resolved')}
-                      className="px-3 py-1 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-md"
+                      className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold flex items-center gap-1.5 transition-colors shadow-xs"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       <span>Mark Resolved</span>
@@ -203,9 +207,9 @@ export const ConversationsPage: React.FC = () => {
                   ) : (
                     <button
                       onClick={() => handleUpdateEscalation('requested')}
-                      className="px-3 py-1 rounded-xl bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-200 text-xs font-semibold flex items-center gap-1.5 transition-colors"
+                      className="px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-300 text-amber-800 text-xs font-semibold flex items-center gap-1.5 transition-colors"
                     >
-                      <AlertTriangle className="w-3.5 h-3.5" />
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
                       <span>Escalate to Human</span>
                     </button>
                   )}
@@ -213,10 +217,10 @@ export const ConversationsPage: React.FC = () => {
               </div>
 
               {/* Messages Transcript */}
-              <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-950/60">
+              <div className="flex-1 p-6 overflow-y-auto space-y-4 bg-slate-50">
                 {loadingMessages ? (
                   <div className="p-8 text-center text-xs text-slate-400 flex items-center justify-center gap-2">
-                    <Loader2 className="w-4 h-4 animate-spin text-indigo-400" />
+                    <Loader2 className="w-4 h-4 animate-spin text-indigo-600" />
                     <span>Loading transcript...</span>
                   </div>
                 ) : messages.length === 0 ? (
@@ -235,7 +239,7 @@ export const ConversationsPage: React.FC = () => {
                           </>
                         ) : (
                           <>
-                            <Bot className="w-3 h-3 text-indigo-400" />
+                            <Bot className="w-3 h-3 text-indigo-600" />
                             <span>AI Support Agent</span>
                           </>
                         )}
@@ -244,19 +248,19 @@ export const ConversationsPage: React.FC = () => {
                       <div
                         className={`p-4 rounded-2xl max-w-[85%] text-xs leading-relaxed ${
                           m.role === 'user'
-                            ? 'bg-indigo-600 text-white rounded-tr-none shadow-md'
-                            : 'bg-slate-900 border border-slate-800 text-slate-200 rounded-tl-none'
+                            ? 'bg-indigo-600 text-white rounded-tr-none shadow-xs'
+                            : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none shadow-2xs'
                         }`}
                       >
                         <p className="whitespace-pre-wrap">{m.content}</p>
 
                         {/* Citations */}
                         {m.sources && m.sources.length > 0 && (
-                          <div className="mt-3 pt-2.5 border-t border-slate-800 flex flex-wrap gap-1.5">
+                          <div className="mt-3 pt-2.5 border-t border-slate-100 flex flex-wrap gap-1.5">
                             {m.sources.map((s, idx) => (
                               <span
                                 key={idx}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 text-[10px] font-semibold"
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-semibold"
                               >
                                 <FileText className="w-3 h-3" />
                                 <span>{s.document}{s.page ? ` (p.${s.page})` : ''}</span>
@@ -272,7 +276,7 @@ export const ConversationsPage: React.FC = () => {
             </>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center text-slate-400">
-              <MessageSquare className="w-10 h-10 text-slate-600 mb-2" />
+              <MessageSquare className="w-10 h-10 text-slate-300 mb-2" />
               <p className="text-xs">Select a conversation from the left to view transcript and citations.</p>
             </div>
           )}

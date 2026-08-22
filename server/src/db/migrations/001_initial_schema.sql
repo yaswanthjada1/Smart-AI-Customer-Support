@@ -1,5 +1,5 @@
 -- Migration: 001_initial_schema.sql
--- Description: Multi-tenant RAG schema with pgvector
+-- Description: Multi-tenant RAG schema with pgvector (1024 dimensions)
 
 -- Enable vector extension
 CREATE EXTENSION IF NOT EXISTS vector;
@@ -52,13 +52,13 @@ CREATE TABLE IF NOT EXISTS documents (
 );
 CREATE INDEX IF NOT EXISTS idx_documents_company ON documents(company_id);
 
--- 5. Document Chunks (pgvector)
+-- 5. Document Chunks (pgvector 1024 dimensions)
 CREATE TABLE IF NOT EXISTS document_chunks (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     company_id UUID NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
     document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
-    embedding vector(768),
+    embedding vector(1024),
     page_number INT,
     section VARCHAR(255),
     metadata JSONB DEFAULT '{}'::jsonb,

@@ -1,6 +1,5 @@
 import { Pool } from 'pg';
 import { PGlite } from '@electric-sql/pglite';
-import { vector } from '@electric-sql/pglite/vector';
 import fs from 'fs';
 import path from 'path';
 import { config } from '../config/env';
@@ -15,20 +14,33 @@ export async function getDb() {
   }
 
   if (config.databaseUrl) {
-    console.log('[DB] Connecting to PostgreSQL at DATABASE_URL...');
-    pool = new Pool({
-      connectionString: config.databaseUrl,
-      ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
-    });
-    // Test connection
-    const client = await pool.connect();
-    client.release();
-    console.log('[DB] PostgreSQL pool connected successfully.');
-  } else {
-    console.log(`[DB] No DATABASE_URL provided. Initializing embedded PostgreSQL (PGlite) with persistence at: ${config.pgliteDir}`);
+    try {
+      const sanitizedUrl = config.databaseUrl.replace(/:[^:@]+@/, ':****@');
+      console.log(`[DB] Connecting to PostgreSQL at: ${sanitizedUrl}`);
+      const testPool = new Pool({
+        connectionString: config.databaseUrl,
+        ssl: config.nodeEnv === 'production' ? { rejectUnauthorized: false } : false,
+      });
+      const client = await testPool.connect();
+      client.release();
+      pool = testPool;
+      console.log('[DB] PostgreSQL pool connected successfully.');
+    } catch (pgErr: any) {
+      console.warn(`[DB] PostgreSQL connection failed (${pgErr.message}).`);
+      console.warn(`[DB] Using embedded PostgreSQL (PGlite) with persistence at: ${config.pgliteDir}`);
+      pool = null;
+    }
+  }
+
+  if (!pool) {
     if (!fs.existsSync(config.pgliteDir)) {
       fs.mkdirSync(config.pgliteDir, { recursive: true });
     }
+    
+    // Dynamically load vector extension for PGlite without compile errors
+    // @ts-ignore
+    const { vector } = require('@electric-sql/pglite/vector');
+    
     pgliteInstance = new PGlite(config.pgliteDir, {
       extensions: {
         vector,
@@ -57,25 +69,33 @@ export async function query<T = any>(sql: string, params: any[] = []): Promise<{
 }
 
 export async function runInitialMigrations(): Promise<void> {
-  const migrationPath = path.resolve(__dirname, './migrations/001_initial_schema.sql');
-  if (!fs.existsSync(migrationPath)) {
-    console.warn(`[DB Migration] Migration file not found at: ${migrationPath}`);
+  const migrationsDir = path.resolve(__dirname, './migrations');
+  if (!fs.existsSync(migrationsDir)) {
+    console.warn(`[DB Migration] Migrations directory not found at: ${migrationsDir}`);
     return;
   }
 
-  const migrationSql = fs.readFileSync(migrationPath, 'utf8');
+  const migrationFiles = fs
+    .readdirSync(migrationsDir)
+    .filter((f) => f.endsWith('.sql'))
+    .sort();
 
-  try {
-    if (pool) {
-      await pool.query(migrationSql);
-      console.log('[DB Migration] Migrations executed successfully on PostgreSQL.');
-    } else if (pgliteInstance) {
-      await pgliteInstance.exec(migrationSql);
-      console.log('[DB Migration] Migrations executed successfully on embedded PostgreSQL.');
+  for (const file of migrationFiles) {
+    const filePath = path.join(migrationsDir, file);
+    const migrationSql = fs.readFileSync(filePath, 'utf8');
+
+    try {
+      if (pool) {
+        await pool.query(migrationSql);
+        console.log(`[DB Migration] Executed ${file} on PostgreSQL.`);
+      } else if (pgliteInstance) {
+        await pgliteInstance.exec(migrationSql);
+        console.log(`[DB Migration] Executed ${file} on embedded PostgreSQL.`);
+      }
+    } catch (err: any) {
+      console.error(`[DB Migration Error in ${file}]`, err.message);
+      // Non-fatal if schema already contains the definition
     }
-  } catch (err: any) {
-    console.error('[DB Migration Error]', err.message);
-    throw err;
   }
 }
 

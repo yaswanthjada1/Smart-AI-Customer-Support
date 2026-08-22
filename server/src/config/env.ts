@@ -24,21 +24,21 @@ export const config = {
   // Local AI (Ollama)
   ollama: {
     baseUrl: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
-    generationModel: process.env.OLLAMA_GENERATION_MODEL || 'qwen3:4b',
+    generationModel: process.env.OLLAMA_GENERATION_MODEL || 'qwen3:1.7b',
     embeddingModel: process.env.OLLAMA_EMBEDDING_MODEL || 'qwen3-embedding:0.6b',
   },
 
-  // AI & Embeddings Provider Selection
+  // AI & Embeddings Provider Selection (Standardized on 1024 dimensions)
   llm: {
     provider: (process.env.LLM_PROVIDER || 'ollama') as 'ollama' | 'gemini' | 'openai' | 'mock',
     apiKey: process.env.LLM_API_KEY || '',
-    model: process.env.LLM_MODEL || 'gemini-2.0-flash',
+    model: process.env.LLM_MODEL || 'qwen3:1.7b',
   },
   embedding: {
     provider: (process.env.EMBEDDING_PROVIDER || 'ollama') as 'ollama' | 'gemini' | 'openai' | 'mock',
     apiKey: process.env.EMBEDDING_API_KEY || '',
-    model: process.env.EMBEDDING_MODEL || 'text-embedding-004',
-    dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '768', 10),
+    model: process.env.EMBEDDING_MODEL || 'qwen3-embedding:0.6b',
+    dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || '1024', 10),
   },
 
   // File storage

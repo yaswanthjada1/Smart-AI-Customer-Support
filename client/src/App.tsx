@@ -15,6 +15,8 @@ import { ConversationsPage } from './pages/Conversations/ConversationsPage';
 import { AnalyticsPage } from './pages/Analytics/AnalyticsPage';
 import { ApiKeysPage } from './pages/ApiKeys/ApiKeysPage';
 import { SettingsPage } from './pages/Settings/SettingsPage';
+import { WidgetChatPage } from './pages/Widget/WidgetChatPage';
+import { WidgetTestPage } from './pages/Widget/WidgetTestPage';
 
 // Protected Route wrapper requiring active authentication
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -53,6 +55,10 @@ export const App: React.FC = () => {
       <TenantProvider>
         <BrowserRouter>
           <Routes>
+            {/* Public Unauthenticated Chatbot & Iframe Routes */}
+            <Route path="/widget" element={<WidgetChatPage />} />
+            <Route path="/widget-test" element={<WidgetTestPage />} />
+
             {/* Public Auth Routes */}
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />

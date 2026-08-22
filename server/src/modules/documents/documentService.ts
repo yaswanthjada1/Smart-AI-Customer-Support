@@ -2,7 +2,7 @@ import { query } from '../../db';
 import { StorageService } from '../../services/storage/storageService';
 import { DocumentExtractor } from '../../utils/extractors';
 import { TextChunker } from '../../utils/chunker';
-import { getEmbeddingProvider } from '../../services/ai/embeddingProvider';
+import { getEmbeddingProvider, REQUIRED_EMBEDDING_DIMENSION } from '../../services/ai/embeddingProvider';
 import { Document, DocumentChunk, DocumentStatus } from '../../types';
 
 export class DocumentService {
@@ -45,8 +45,29 @@ export class DocumentService {
   }
 
   /**
+   * Uploads and ingests a text document directly, waiting for completion.
+   */
+  static async uploadAndIngestTextDocument(
+    companyId: string,
+    fileName: string,
+    textContent: string
+  ): Promise<Document> {
+    const buffer = Buffer.from(textContent, 'utf-8');
+    return this.uploadAndProcessDocument(
+      companyId,
+      {
+        originalname: fileName,
+        buffer,
+        mimetype: 'text/plain',
+        size: buffer.length,
+      },
+      true
+    );
+  }
+
+  /**
    * Core Document Ingestion Pipeline:
-   * Document -> Text extraction -> Cleaning -> Chunking -> Embeddings -> pgvector -> Ready
+   * Document -> Text extraction -> Cleaning -> Chunking -> Embeddings (1024-dim) -> pgvector -> Ready
    */
   static async processDocument(
     documentId: string,
@@ -85,10 +106,25 @@ export class DocumentService {
         throw new Error('Document produced 0 valid text chunks.');
       }
 
-      // Step 5: Generate Vector Embeddings
+      // Step 5: Generate Vector Embeddings (Standardized on 1024 dimensions)
       const embeddingProvider = getEmbeddingProvider();
       const texts = chunks.map((c) => c.content);
       const embeddings = await embeddingProvider.generateEmbeddings(texts);
+
+      if (embeddings.length !== chunks.length) {
+        throw new Error(
+          `Embedding count mismatch: expected ${chunks.length} embeddings, received ${embeddings.length}`
+        );
+      }
+
+      for (let i = 0; i < embeddings.length; i++) {
+        const vec = embeddings[i];
+        if (!Array.isArray(vec) || vec.length !== REQUIRED_EMBEDDING_DIMENSION) {
+          throw new Error(
+            `Embedding dimension mismatch on chunk ${i}: expected ${REQUIRED_EMBEDDING_DIMENSION} dimensions, received ${vec?.length || 0}`
+          );
+        }
+      }
 
       // Delete existing chunks if re-indexing
       await query(
@@ -96,7 +132,7 @@ export class DocumentService {
         [documentId, companyId]
       );
 
-      // Step 6: Batch insert into document_chunks with pgvector
+      // Step 6: Batch insert into document_chunks with pgvector (1024 dimensions)
       for (let i = 0; i < chunks.length; i++) {
         const chunk = chunks[i];
         const vectorStr = `[${embeddings[i].join(',')}]`;
@@ -122,9 +158,9 @@ export class DocumentService {
         [documentId, companyId]
       );
 
-      console.log(`[DocumentService] Document ${documentId} indexed successfully (${chunks.length} chunks).`);
+      console.log(`[DocumentService] Document ${documentId} indexed successfully (${chunks.length} chunks at 1024 dimensions).`);
     } catch (err: any) {
-      console.error(`[DocumentService] Ingestion failed for document ${documentId}:`, err);
+      console.error(`[DocumentService] Ingestion failed for document ${documentId}:`, err.message);
       await query(
         "UPDATE documents SET status = 'failed', error_message = $1, updated_at = NOW() WHERE id = $2 AND company_id = $3",
         [err.message || 'Unknown processing error', documentId, companyId]

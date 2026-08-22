@@ -7,14 +7,14 @@ import { z } from 'zod';
 const createCompanySchema = z.object({
   name: z.string().min(2, 'Company name must be at least 2 characters').max(100),
   slug: z.string().max(100).optional(),
-  website: z.string().url('Invalid website URL').optional().or(z.literal('')),
-  logo_url: z.string().url('Invalid logo URL').optional().or(z.literal('')),
+  website: z.string().max(255).optional().or(z.literal('')),
+  logo_url: z.string().max(500).optional().or(z.literal('')),
 });
 
 const updateCompanySchema = z.object({
   name: z.string().min(2).max(100).optional(),
-  website: z.string().url().optional().or(z.literal('')),
-  logo_url: z.string().url().optional().or(z.literal('')),
+  website: z.string().max(255).optional().or(z.literal('')),
+  logo_url: z.string().max(500).optional().or(z.literal('')),
 });
 
 export class CompanyController {
@@ -34,7 +34,7 @@ export class CompanyController {
       const result = await CompanyService.createCompany(req.user.id, parseResult.data);
       res.status(201).json(result);
     } catch (err: any) {
-      console.error('[CompanyController.createCompany]', err);
+      console.error('[CompanyController.createCompany Error]', err);
       res.status(500).json({ error: err.message || 'Failed to create company workspace.' });
     }
   }
@@ -49,7 +49,7 @@ export class CompanyController {
       const companies = await CompanyService.getUserCompanies(req.user.id);
       res.json({ companies });
     } catch (err: any) {
-      console.error('[CompanyController.getUserCompanies]', err);
+      console.error('[CompanyController.getUserCompanies Error]', err);
       res.status(500).json({ error: err.message || 'Failed to fetch companies.' });
     }
   }

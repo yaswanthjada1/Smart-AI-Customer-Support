@@ -1,298 +1,215 @@
+/**
+ * AeroRAG Embeddable Customer Support AI Widget
+ * Lightweight, zero-dependency embed script that injects a floating button and responsive iframe.
+ */
 (function() {
-  // Find script element and configuration
+  // Prevent multiple initializations
+  if (window.__AERORAG_WIDGET_INITIALIZED__) return;
+  window.__AERORAG_WIDGET_INITIALIZED__ = true;
+
+  // 1. Locate the invoking script element & extract attributes
   const currentScript = document.currentScript || (function() {
     const scripts = document.getElementsByTagName('script');
+    for (let i = scripts.length - 1; i >= 0; i--) {
+      if (scripts[i].src && scripts[i].src.includes('widget.js')) return scripts[i];
+    }
     return scripts[scripts.length - 1];
   })();
 
-  const companyId = currentScript ? currentScript.getAttribute('data-company-id') : null;
-  const apiHost = (currentScript ? currentScript.getAttribute('data-api-host') : null) || window.location.origin;
-
-  if (!companyId) {
-    console.error('[AeroRAG Widget] Missing data-company-id attribute on script tag.');
+  if (!currentScript) {
+    console.error('[AeroRAG Widget] Unable to locate script tag.');
     return;
   }
 
-  // Session handling
-  let sessionId = localStorage.getItem('aerorag_session_' + companyId);
-  if (!sessionId) {
-    sessionId = 'session_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
-    localStorage.setItem('aerorag_session_' + companyId, sessionId);
+  const companyId = currentScript.getAttribute('data-company-id');
+  if (!companyId) {
+    console.error('[AeroRAG Widget] Missing required data-company-id attribute on widget script tag.');
+    return;
   }
 
-  // Default configuration
-  let config = {
-    bot_name: 'Support Assistant',
-    welcome_message: 'Hello! How can I help you today?',
-    primary_color: '#4f46e5',
-    logo_url: null,
-    company_name: 'Support'
-  };
+  // Derive widget base URL from script source or current origin
+  let widgetBaseUrl = '';
+  try {
+    const scriptUrl = new URL(currentScript.src, window.location.href);
+    widgetBaseUrl = scriptUrl.origin;
+  } catch (e) {
+    widgetBaseUrl = window.location.origin;
+  }
+
+  const customBaseUrl = currentScript.getAttribute('data-widget-url');
+  if (customBaseUrl) {
+    widgetBaseUrl = customBaseUrl.replace(/\/+$/, '');
+  }
 
   let isOpen = false;
-  let messages = [];
 
-  // Create Container
+  // 2. Create Outer Widget Host Container (Zero host style interference)
   const container = document.createElement('div');
-  container.id = 'aerorag-widget-container';
-  container.style.position = 'fixed';
-  container.style.bottom = '24px';
-  container.style.right = '24px';
-  container.style.zIndex = '999999';
-  container.style.fontFamily = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+  container.id = 'aerorag-root';
+  container.style.cssText = `
+    position: fixed !important;
+    bottom: 20px !important;
+    right: 20px !important;
+    z-index: 2147483647 !important;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    line-height: normal !important;
+  `;
   document.body.appendChild(container);
 
-  // Create Floating Launcher Button
+  // 3. Create Iframe Element
+  const iframeContainer = document.createElement('div');
+  iframeContainer.id = 'aerorag-iframe-wrapper';
+  iframeContainer.style.cssText = `
+    display: none;
+    position: absolute !important;
+    bottom: 72px !important;
+    right: 0 !important;
+    width: 380px !important;
+    max-width: calc(100vw - 32px) !important;
+    height: 600px !important;
+    max-height: calc(100vh - 100px) !important;
+    border-radius: 18px !important;
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.25), 0 0 0 1px rgba(0, 0, 0, 0.08) !important;
+    overflow: hidden !important;
+    background: #ffffff !important;
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+    transition: opacity 0.22s ease, transform 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  `;
+
+  const iframe = document.createElement('iframe');
+  iframe.id = 'aerorag-chat-iframe';
+  iframe.src = `${widgetBaseUrl}/widget?companyId=${encodeURIComponent(companyId)}`;
+  iframe.title = 'AeroRAG AI Support Assistant';
+  iframe.style.cssText = `
+    width: 100% !important;
+    height: 100% !important;
+    border: none !important;
+    outline: none !important;
+    background: transparent !important;
+    display: block !important;
+  `;
+  iframe.setAttribute('allow', 'clipboard-write');
+  iframeContainer.appendChild(iframe);
+  container.appendChild(iframeContainer);
+
+  // 4. Create Floating Launcher Button
   const launcher = document.createElement('button');
-  launcher.id = 'aerorag-launcher';
+  launcher.id = 'aerorag-launcher-btn';
+  launcher.setAttribute('aria-label', 'Open Customer Support Chat');
   launcher.innerHTML = `
-    <svg id="aerorag-icon-open" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-    </svg>
-    <svg id="aerorag-icon-close" style="display:none;" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18"></line>
-      <line x1="6" y1="6" x2="18" y2="18"></line>
-    </svg>
+    <div id="aerorag-icon-chat" style="display:flex;align-items:center;justify-content:center;transition:transform 0.2s ease;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+      </svg>
+    </div>
+    <div id="aerorag-icon-close" style="display:none;align-items:center;justify-content:center;transition:transform 0.2s ease;">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </div>
   `;
+
   launcher.style.cssText = `
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    background: ${config.primary_color};
-    color: white;
-    border: none;
-    cursor: pointer;
-    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
-    outline: none;
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 50% !important;
+    background: #4f46e5 !important;
+    color: #ffffff !important;
+    border: none !important;
+    cursor: pointer !important;
+    box-shadow: 0 8px 24px -4px rgba(79, 70, 229, 0.45), 0 4px 10px rgba(0, 0, 0, 0.1) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease !important;
+    outline: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
   `;
-  launcher.addEventListener('mouseenter', () => launcher.style.transform = 'scale(1.08)');
-  launcher.addEventListener('mouseleave', () => launcher.style.transform = 'scale(1)');
+
+  launcher.addEventListener('mouseenter', () => {
+    launcher.style.transform = 'scale(1.08)';
+  });
+  launcher.addEventListener('mouseleave', () => {
+    launcher.style.transform = 'scale(1)';
+  });
+
   container.appendChild(launcher);
 
-  // Create Chat Window Box
-  const chatWindow = document.createElement('div');
-  chatWindow.id = 'aerorag-window';
-  chatWindow.style.cssText = `
-    display: none;
-    position: absolute;
-    bottom: 75px;
-    right: 0;
-    width: 380px;
-    max-width: calc(100vw - 32px);
-    height: 580px;
-    max-height: calc(100vh - 120px);
-    background: #0f172a;
-    color: #f8fafc;
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 20px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05);
-    flex-direction: column;
-    overflow: hidden;
-    animation: aerorag-appear 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  `;
-  container.appendChild(chatWindow);
+  // 5. Open / Close Toggle Logic
+  function toggleWidget(forceState) {
+    isOpen = typeof forceState === 'boolean' ? forceState : !isOpen;
 
-  // Add Styles
-  const style = document.createElement('style');
-  style.innerHTML = `
-    @keyframes aerorag-appear {
-      from { opacity: 0; transform: translateY(16px) scale(0.96); }
-      to { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    .aerorag-msg { margin-bottom: 12px; font-size: 13px; line-height: 1.5; }
-    .aerorag-msg-user { align-self: flex-end; background: ${config.primary_color}; color: white; padding: 10px 14px; border-radius: 16px 16px 4px 16px; max-width: 80%; }
-    .aerorag-msg-assistant { align-self: flex-start; background: #1e293b; color: #f1f5f9; padding: 12px 14px; border-radius: 16px 16px 16px 4px; max-width: 85%; border: 1px solid rgba(255,255,255,0.06); }
-    .aerorag-citation { display: inline-flex; align-items: center; gap: 4px; background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.3); border-radius: 6px; padding: 2px 6px; font-size: 10px; font-weight: 500; margin-top: 6px; margin-right: 4px; }
-  `;
-  document.head.appendChild(style);
-
-  // Render Chat Window Contents
-  function renderChatWindow() {
-    chatWindow.innerHTML = `
-      <div style="padding: 16px; background: ${config.primary_color}; color: white; display: flex; align-items: center; justify-content: space-between;">
-        <div style="display: flex; align-items: center; gap: 10px;">
-          <div style="width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 14px;">
-            ${config.logo_url ? `<img src="${config.logo_url}" style="width:100%;height:100%;border-radius:10px;object-fit:cover;"/>` : '🤖'}
-          </div>
-          <div>
-            <div style="font-weight: 700; font-size: 14px;">${config.bot_name}</div>
-            <div style="font-size: 11px; opacity: 0.85;">${config.company_name} Support</div>
-          </div>
-        </div>
-        <button id="aerorag-close-btn" style="background: none; border: none; color: white; cursor: pointer; padding: 4px; border-radius: 6px;">✕</button>
-      </div>
-
-      <div id="aerorag-messages-container" style="flex: 1; padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #0b1329;">
-        <!-- Messages render here -->
-      </div>
-
-      <div style="padding: 12px 14px; background: #0f172a; border-top: 1px solid #1e293b; display: flex; gap: 8px;">
-        <input id="aerorag-input" type="text" placeholder="Ask a question..." style="flex: 1; background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 10px 14px; color: white; font-size: 13px; outline: none;" />
-        <button id="aerorag-send-btn" style="background: ${config.primary_color}; border: none; border-radius: 12px; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; color: white; cursor: pointer;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-        </button>
-      </div>
-    `;
-
-    document.getElementById('aerorag-close-btn').addEventListener('click', toggleWidget);
-    document.getElementById('aerorag-send-btn').addEventListener('click', sendMessage);
-    document.getElementById('aerorag-input').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') sendMessage();
-    });
-
-    renderMessages();
-  }
-
-  function renderMessages() {
-    const container = document.getElementById('aerorag-messages-container');
-    if (!container) return;
-
-    if (messages.length === 0) {
-      container.innerHTML = `
-        <div class="aerorag-msg aerorag-msg-assistant">
-          ${config.welcome_message}
-        </div>
-      `;
-      return;
-    }
-
-    container.innerHTML = messages.map(m => {
-      if (m.role === 'user') {
-        return `<div class="aerorag-msg aerorag-msg-user">${escapeHtml(m.content)}</div>`;
-      }
-
-      let citationsHtml = '';
-      if (m.sources && m.sources.length > 0) {
-        citationsHtml = '<div style="margin-top: 8px; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 6px;">' +
-          m.sources.map(s => `<span class="aerorag-citation">📄 ${escapeHtml(s.document)}${s.page ? ' (p.' + s.page + ')' : ''}</span>`).join('') +
-          '</div>';
-      }
-
-      let escalationHtml = '';
-      if (m.escalation_required) {
-        escalationHtml = `
-          <div style="margin-top: 10px; padding: 8px 10px; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.3); border-radius: 8px; font-size: 11px; color: #fbbf24; display: flex; align-items: center; justify-content: space-between;">
-            <span>Support agent assistance requested</span>
-            <span style="font-weight: bold; text-decoration: underline; cursor: pointer;">Ticket #AF-${Math.floor(1000 + Math.random()*9000)}</span>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="aerorag-msg aerorag-msg-assistant">
-          <div>${escapeHtml(m.content)}</div>
-          ${citationsHtml}
-          ${escalationHtml}
-        </div>
-      `;
-    }).join('');
-
-    container.scrollTop = container.scrollHeight;
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  async function sendMessage() {
-    const input = document.getElementById('aerorag-input');
-    const question = input.value.trim();
-    if (!question) return;
-
-    input.value = '';
-    messages.push({ role: 'user', content: question });
-    renderMessages();
-
-    // Add loading placeholder
-    const loadingId = 'loading-' + Date.now();
-    const container = document.getElementById('aerorag-messages-container');
-    const loadingElem = document.createElement('div');
-    loadingElem.id = loadingId;
-    loadingElem.className = 'aerorag-msg aerorag-msg-assistant';
-    loadingElem.style.opacity = '0.7';
-    loadingElem.innerHTML = 'Thinking & searching knowledge base...';
-    container.appendChild(loadingElem);
-    container.scrollTop = container.scrollHeight;
-
-    try {
-      const res = await fetch(`${apiHost}/api/public/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_id: companyId,
-          session_id: sessionId,
-          message: question,
-        }),
-      });
-
-      const data = await res.json();
-      const loadElem = document.getElementById(loadingId);
-      if (loadElem) loadElem.remove();
-
-      if (res.ok) {
-        messages.push({
-          role: 'assistant',
-          content: data.answer,
-          sources: data.sources || [],
-          escalation_required: data.escalation_required || false,
-        });
-      } else {
-        messages.push({
-          role: 'assistant',
-          content: data.error || 'Unable to complete request. Please try again.',
-          sources: [],
-          escalation_required: true,
-        });
-      }
-      renderMessages();
-    } catch (err) {
-      const loadElem = document.getElementById(loadingId);
-      if (loadElem) loadElem.remove();
-      messages.push({
-        role: 'assistant',
-        content: 'Connection error. Please check your network and try again.',
-        sources: [],
-        escalation_required: true,
-      });
-      renderMessages();
-    }
-  }
-
-  function toggleWidget() {
-    isOpen = !isOpen;
-    chatWindow.style.display = isOpen ? 'flex' : 'none';
-    document.getElementById('aerorag-icon-open').style.display = isOpen ? 'none' : 'block';
-    document.getElementById('aerorag-icon-close').style.display = isOpen ? 'block' : 'none';
+    const chatIcon = document.getElementById('aerorag-icon-chat');
+    const closeIcon = document.getElementById('aerorag-icon-close');
 
     if (isOpen) {
+      iframeContainer.style.display = 'block';
+      // Trigger animation frame for smooth CSS transition
+      requestAnimationFrame(() => {
+        iframeContainer.style.opacity = '1';
+        iframeContainer.style.transform = 'translateY(0) scale(1)';
+      });
+
+      if (chatIcon) chatIcon.style.display = 'none';
+      if (closeIcon) closeIcon.style.display = 'flex';
+      launcher.setAttribute('aria-label', 'Close Customer Support Chat');
+
+      // Notify iframe that it is open
+      try {
+        iframe.contentWindow.postMessage({ type: 'aerorag:state_change', isOpen: true }, '*');
+      } catch (e) {}
+    } else {
+      iframeContainer.style.opacity = '0';
+      iframeContainer.style.transform = 'translateY(12px) scale(0.96)';
+
       setTimeout(() => {
-        const input = document.getElementById('aerorag-input');
-        if (input) input.focus();
-      }, 100);
+        if (!isOpen) iframeContainer.style.display = 'none';
+      }, 220);
+
+      if (chatIcon) chatIcon.style.display = 'flex';
+      if (closeIcon) closeIcon.style.display = 'none';
+      launcher.setAttribute('aria-label', 'Open Customer Support Chat');
+
+      try {
+        iframe.contentWindow.postMessage({ type: 'aerorag:state_change', isOpen: false }, '*');
+      } catch (e) {}
     }
   }
 
-  launcher.addEventListener('click', toggleWidget);
+  launcher.addEventListener('click', () => toggleWidget());
 
-  // Fetch Public Configuration
-  fetch(`${apiHost}/api/public/config/${companyId}`)
-    .then(r => r.json())
-    .then(data => {
-      if (data && !data.error) {
-        config = { ...config, ...data };
-        launcher.style.background = config.primary_color;
-        renderChatWindow();
-      } else {
-        renderChatWindow();
+  // 6. Listen for postMessage from Iframe (e.g. close button inside iframe or theme color update)
+  window.addEventListener('message', (event) => {
+    if (!event.data || typeof event.data !== 'object') return;
+
+    if (event.data.type === 'aerorag:close') {
+      toggleWidget(false);
+    } else if (event.data.type === 'aerorag:set_primary_color' && event.data.color) {
+      launcher.style.background = event.data.color;
+      launcher.style.boxShadow = `0 8px 24px -4px ${event.data.color}66, 0 4px 10px rgba(0, 0, 0, 0.1)`;
+    }
+  });
+
+  // 7. Inject Mobile Responsiveness CSS for Host Page
+  const responsiveStyle = document.createElement('style');
+  responsiveStyle.innerHTML = `
+    @media (max-width: 480px) {
+      #aerorag-iframe-wrapper {
+        position: fixed !important;
+        top: 10px !important;
+        left: 10px !important;
+        right: 10px !important;
+        bottom: 80px !important;
+        width: calc(100vw - 20px) !important;
+        height: calc(100vh - 90px) !important;
+        max-width: none !important;
+        max-height: none !important;
+        border-radius: 16px !important;
       }
-    })
-    .catch(() => {
-      renderChatWindow();
-    });
+    }
+  `;
+  document.head.appendChild(responsiveStyle);
 })();

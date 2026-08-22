@@ -7,7 +7,11 @@ export interface AuthenticatedRequest extends Request {
   user?: User;
 }
 
-export async function authenticateFirebaseUser(req: AuthenticatedRequest, res: Response, next: NextFunction): Promise<void> {
+export async function authenticateFirebaseUser(
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+): Promise<void> {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     res.status(401).json({ error: 'Missing or malformed Authorization header. Expected Bearer <token>.' });
@@ -22,37 +26,25 @@ export async function authenticateFirebaseUser(req: AuthenticatedRequest, res: R
 
   try {
     const decoded = await verifyFirebaseIdToken(idToken);
-    
-    // Find or create application user
-    const existingUser = await query<User>(
-      'SELECT id, firebase_uid, email, display_name, photo_url, created_at FROM users WHERE firebase_uid = $1 LIMIT 1',
-      [decoded.uid]
+    const userEmail = decoded.email || `${decoded.uid}@example.com`;
+    const userDisplayName = decoded.name || userEmail.split('@')[0];
+
+    // Atomic find/create or sync application user in PostgreSQL
+    const upsertRes = await query<User>(
+      `INSERT INTO users (firebase_uid, email, display_name, photo_url)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (firebase_uid) DO UPDATE
+       SET email = EXCLUDED.email,
+           display_name = COALESCE(EXCLUDED.display_name, users.display_name),
+           photo_url = COALESCE(EXCLUDED.photo_url, users.photo_url)
+       RETURNING id, firebase_uid, email, display_name, photo_url, created_at`,
+      [decoded.uid, userEmail, userDisplayName, decoded.picture || null]
     );
 
-    let user: User;
-    if (existingUser.rows.length > 0) {
-      user = existingUser.rows[0];
-      // Update display_name / photo_url if provided and changed
-      if (decoded.name && decoded.name !== user.display_name) {
-        await query(
-          'UPDATE users SET display_name = $1, photo_url = COALESCE($2, photo_url) WHERE id = $3',
-          [decoded.name, decoded.picture || null, user.id]
-        );
-        user.display_name = decoded.name;
-      }
-    } else {
-      const newUser = await query<User>(
-        `INSERT INTO users (firebase_uid, email, display_name, photo_url)
-         VALUES ($1, $2, $3, $4)
-         RETURNING id, firebase_uid, email, display_name, photo_url, created_at`,
-        [decoded.uid, decoded.email, decoded.name || null, decoded.picture || null]
-      );
-      user = newUser.rows[0];
-    }
-
-    req.user = user;
+    req.user = upsertRes.rows[0];
     next();
   } catch (err: any) {
+    console.error('[authenticateFirebaseUser Error]', err.message);
     res.status(401).json({ error: 'Unauthorized: ' + (err.message || 'Token verification failed.') });
   }
 }
