@@ -37,9 +37,18 @@ export function getFirebaseAdmin(): typeof admin {
 export async function verifyFirebaseIdToken(
   token: string
 ): Promise<{ uid: string; email: string; name?: string; picture?: string }> {
-  const adminApp = getFirebaseAdmin();
+  // 1. Development / Test token verification fallback
+  if (token.startsWith('dev-token-') || token.startsWith('mock-')) {
+    const uid = token.replace('dev-token-', '').replace('mock-', '');
+    return {
+      uid,
+      email: `${uid}@example.com`,
+      name: `User ${uid.substring(0, 5)}`,
+    };
+  }
 
-  // 1. Try real Firebase Admin verification with Google public certs
+  // 2. Try real Firebase Admin verification with Google public certs
+  const adminApp = getFirebaseAdmin();
   if (adminApp.apps.length > 0) {
     try {
       const decoded = await adminApp.auth().verifyIdToken(token);
@@ -50,19 +59,8 @@ export async function verifyFirebaseIdToken(
         picture: decoded.picture,
       };
     } catch (authErr: any) {
-      // If token verification failed because of token format or expired token, log for debugging
       console.warn('[Firebase Auth] verifyIdToken check:', authErr.message);
     }
-  }
-
-  // 2. Development / Test token verification fallback
-  if (token.startsWith('dev-token-') || token.startsWith('mock-')) {
-    const uid = token.replace('dev-token-', '').replace('mock-', '');
-    return {
-      uid,
-      email: `${uid}@example.com`,
-      name: `User ${uid.substring(0, 5)}`,
-    };
   }
 
   // 3. Fallback: Parse unverified JWT payload for local development/offline testing

@@ -37,6 +37,7 @@ interface ChatbotConfig {
   welcome_message: string;
   logo_url: string | null;
   primary_color: string;
+  widgetToken?: string;
 }
 
 export const WidgetChatPage: React.FC = () => {
@@ -51,6 +52,7 @@ export const WidgetChatPage: React.FC = () => {
     primary_color: '#4f46e5',
   });
 
+  const [widgetToken, setWidgetToken] = useState<string | null>(null);
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [configError, setConfigError] = useState<string | null>(null);
 
@@ -79,19 +81,31 @@ export const WidgetChatPage: React.FC = () => {
     }
     setSessionId(activeSession);
 
-    // Fetch Public Config
+    // Fetch Public Widget Config
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`/api/public/config/${encodeURIComponent(companyId)}`);
+        const res = await fetch(`/api/public/widget-config/${encodeURIComponent(companyId)}`);
         if (!res.ok) {
           throw new Error('Company chatbot not found or disabled.');
         }
-        const data: ChatbotConfig = await res.json();
-        setConfig(data);
+        const data: any = await res.json();
+        const parsedConfig: ChatbotConfig = {
+          company_name: data.company_name || data.companyName || 'Support',
+          bot_name: data.bot_name || data.botName || 'Support Assistant',
+          welcome_message: data.welcome_message || data.welcomeMessage || 'Hello! How can I help you today?',
+          logo_url: data.logo_url || data.logoUrl || null,
+          primary_color: data.primary_color || data.brandColor || '#4f46e5',
+          widgetToken: data.widgetToken,
+        };
+
+        setConfig(parsedConfig);
+        if (data.widgetToken) {
+          setWidgetToken(data.widgetToken);
+        }
 
         // Notify parent iframe wrapper of theme color
         if (window.parent && window.parent !== window) {
-          window.parent.postMessage({ type: 'aerorag:set_primary_color', color: data.primary_color }, '*');
+          window.parent.postMessage({ type: 'aerorag:set_primary_color', color: parsedConfig.primary_color }, '*');
         }
 
         // Initialize greeting message
@@ -99,7 +113,7 @@ export const WidgetChatPage: React.FC = () => {
           {
             id: 'welcome-msg',
             role: 'assistant',
-            content: data.welcome_message || `Hello! Welcome to ${data.company_name} support. How can I help you today?`,
+            content: parsedConfig.welcome_message || `Hello! Welcome to ${parsedConfig.company_name} support. How can I help you today?`,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
           },
         ]);
@@ -159,20 +173,26 @@ export const WidgetChatPage: React.FC = () => {
     setIsSending(true);
 
     try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+      if (widgetToken) {
+        headers['Authorization'] = `Bearer ${widgetToken}`;
+      }
+
       const res = await fetch('/api/public/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers,
         body: JSON.stringify({
           companyId,
           sessionId,
           message: textToSend,
+          widgetToken,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || 'Failed to generate response.');
+        throw new Error(data.error || "Sorry, I couldn't process your request right now.");
       }
 
       const botMessage: Message = {
@@ -189,7 +209,7 @@ export const WidgetChatPage: React.FC = () => {
       const errorMessage: Message = {
         id: 'err-' + Date.now(),
         role: 'assistant',
-        content: err.message || "Sorry, I couldn't process that request right now.",
+        content: err.message || "Sorry, I couldn't process your request right now.",
         escalation_required: true,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       };

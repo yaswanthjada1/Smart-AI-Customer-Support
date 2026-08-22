@@ -4,16 +4,17 @@ import { ApiKey, Company } from '../../types';
 
 export class ApiKeyService {
   /**
-   * Generates a new API Key for a company.
+   * Generates a new API Key for a company using standard 'ar_live_' prefix.
    * Returns the full raw key ONCE. Stores only SHA-256 hash in database.
    */
   static async createApiKey(
     companyId: string,
     name: string
   ): Promise<{ apiKey: ApiKey; rawKey: string }> {
-    const randomSecret = crypto.randomBytes(24).toString('hex');
-    const rawKey = `sk_live_${randomSecret}`;
-    const keyPrefix = `sk_live_${randomSecret.substring(0, 6)}...`;
+    const randomSecret = crypto.randomBytes(20).toString('hex');
+    const rawKey = `ar_live_${randomSecret}`;
+    const suffix = rawKey.slice(-4);
+    const keyPrefix = `ar_live_********${suffix}`;
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
     const res = await query<ApiKey>(
@@ -57,14 +58,26 @@ export class ApiKeyService {
   }
 
   /**
-   * Authenticates an API Key request for the Business API.
+   * Authenticates an API Key request (supports both ar_live_ and sk_live_ prefixes).
+   * Verifies key hash, checks revoked status, and updates last_used_at timestamp.
    */
   static async validateApiKey(rawKey: string): Promise<{ company: Company; keyId: string } | null> {
-    if (!rawKey || !rawKey.startsWith('sk_live_')) return null;
+    if (!rawKey || (!rawKey.startsWith('ar_live_') && !rawKey.startsWith('sk_live_'))) {
+      return null;
+    }
 
     const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
 
-    const res = await query<{ id: string; company_id: string; revoked_at: Date | null; name: string; slug: string; website: string; logo_url: string; created_at: Date }>(
+    const res = await query<{
+      id: string;
+      company_id: string;
+      revoked_at: Date | null;
+      name: string;
+      slug: string;
+      website: string;
+      logo_url: string;
+      created_at: Date;
+    }>(
       `SELECT k.id, k.company_id, k.revoked_at, c.name, c.slug, c.website, c.logo_url, c.created_at
        FROM api_keys k
        INNER JOIN companies c ON k.company_id = c.id
@@ -92,5 +105,44 @@ export class ApiKeyService {
     };
 
     return { company, keyId: row.id };
+  }
+
+  /**
+   * Generates a short-lived cryptographically signed widget token for anonymous iframe sessions.
+   */
+  static generateWidgetToken(companyId: string): string {
+    const payload = {
+      companyId,
+      purpose: 'widget',
+      exp: Date.now() + 24 * 60 * 60 * 1000, // 24 hours
+    };
+    const data = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    const secret = process.env.SESSION_SECRET || 'aerorag-widget-auth-secret';
+    const sig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
+    return `wgt_${data}.${sig}`;
+  }
+
+  /**
+   * Validates a signed widget token.
+   */
+  static validateWidgetToken(token: string): { companyId: string } | null {
+    if (!token || !token.startsWith('wgt_')) return null;
+    try {
+      const raw = token.slice(4);
+      const [data, sig] = raw.split('.');
+      if (!data || !sig) return null;
+
+      const secret = process.env.SESSION_SECRET || 'aerorag-widget-auth-secret';
+      const expectedSig = crypto.createHmac('sha256', secret).update(data).digest('base64url');
+      if (sig !== expectedSig) return null;
+
+      const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf-8'));
+      if (payload.exp && payload.exp < Date.now()) return null;
+      if (payload.purpose !== 'widget' || !payload.companyId) return null;
+
+      return { companyId: payload.companyId };
+    } catch (e) {
+      return null;
+    }
   }
 }

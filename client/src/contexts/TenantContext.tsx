@@ -7,6 +7,8 @@ interface TenantContextType {
   activeCompany: Company | null;
   companies: Company[];
   loading: boolean;
+  tenantLoading: boolean;
+  onboardingRequired: boolean;
   switchCompany: (companyId: string) => void;
   createCompany: (data: { name: string; website?: string; logo_url?: string }) => Promise<Company>;
   refreshCompanies: () => Promise<void>;
@@ -15,32 +17,67 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, token } = useAuth();
+  const { currentUser, token, initialCompanies, loading: authLoading } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompany, setActiveCompany] = useState<Company | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [tenantLoading, setTenantLoading] = useState<boolean>(true);
+
+  // Sync initial companies from AuthContext (/api/app/me)
+  useEffect(() => {
+    if (authLoading) {
+      setTenantLoading(true);
+      return;
+    }
+
+    if (!token || !currentUser) {
+      setCompanies([]);
+      setActiveCompany(null);
+      setTenantLoading(false);
+      return;
+    }
+
+    // Populate from /api/app/me response
+    const comps = initialCompanies || [];
+    setCompanies(comps);
+
+    const savedId = localStorage.getItem('active_company_id');
+    const found = comps.find((c) => c.id === savedId);
+
+    if (found) {
+      setActiveCompany(found);
+    } else if (comps.length > 0) {
+      setActiveCompany(comps[0]);
+      localStorage.setItem('active_company_id', comps[0].id);
+    } else {
+      setActiveCompany(null);
+      localStorage.removeItem('active_company_id');
+    }
+
+    setTenantLoading(false);
+  }, [authLoading, token, currentUser, initialCompanies]);
 
   const fetchCompanies = useCallback(async () => {
     if (!token || !currentUser) {
       setCompanies([]);
       setActiveCompany(null);
-      setLoading(false);
+      setTenantLoading(false);
       return;
     }
 
     try {
-      setLoading(true);
+      setTenantLoading(true);
       const res = await apiClient<{ companies: Company[] }>('/api/app/companies');
-      setCompanies(res.companies || []);
+      const comps = res.companies || [];
+      setCompanies(comps);
 
       const savedId = localStorage.getItem('active_company_id');
-      const found = res.companies?.find((c) => c.id === savedId);
+      const found = comps.find((c) => c.id === savedId);
 
       if (found) {
         setActiveCompany(found);
-      } else if (res.companies && res.companies.length > 0) {
-        setActiveCompany(res.companies[0]);
-        localStorage.setItem('active_company_id', res.companies[0].id);
+      } else if (comps.length > 0) {
+        setActiveCompany(comps[0]);
+        localStorage.setItem('active_company_id', comps[0].id);
       } else {
         setActiveCompany(null);
         localStorage.removeItem('active_company_id');
@@ -48,13 +85,9 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch (err) {
       console.error('[TenantContext] Error fetching companies:', err);
     } finally {
-      setLoading(false);
+      setTenantLoading(false);
     }
   }, [token, currentUser]);
-
-  useEffect(() => {
-    fetchCompanies();
-  }, [fetchCompanies]);
 
   const switchCompany = (companyId: string) => {
     const target = companies.find((c) => c.id === companyId);
@@ -77,12 +110,17 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     return newCompany;
   };
 
+  const overallLoading = authLoading || tenantLoading;
+  const onboardingRequired = !overallLoading && !!currentUser && companies.length === 0;
+
   return (
     <TenantContext.Provider
       value={{
         activeCompany,
         companies,
-        loading,
+        loading: overallLoading,
+        tenantLoading,
+        onboardingRequired,
         switchCompany,
         createCompany,
         refreshCompanies: fetchCompanies,

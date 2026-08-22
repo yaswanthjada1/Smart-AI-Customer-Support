@@ -7,7 +7,7 @@
     "dev": "nodemon --watch src -e ts --exec ts-node src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "test": "vitest run",
+    "test": "vitest run --fileParallelism=false",
     "migrate": "ts-node src/db/runMigrations.ts"
   },
   "dependencies": {

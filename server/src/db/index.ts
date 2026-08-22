@@ -46,6 +46,7 @@ export async function getDb() {
         vector,
       },
     });
+    await pgliteInstance.waitReady;
     console.log('[DB] Embedded PostgreSQL (PGlite) with pgvector initialized successfully.');
   }
 
@@ -62,7 +63,8 @@ export async function query<T = any>(sql: string, params: any[] = []): Promise<{
     return { rows: res.rows as T[], rowCount: res.rowCount || 0 };
   } else if (pgliteInstance) {
     const res = await pgliteInstance.query(sql, params);
-    return { rows: res.rows as T[], rowCount: res.rows.length };
+    const count = (res as any).affectedRows !== undefined ? (res as any).affectedRows : res.rows.length;
+    return { rows: res.rows as T[], rowCount: count };
   } else {
     throw new Error('Database is not initialized.');
   }

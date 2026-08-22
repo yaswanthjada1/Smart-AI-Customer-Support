@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import {
   auth,
   googleProvider,
@@ -11,13 +11,22 @@ import {
   FirebaseUser,
 } from '../lib/firebase';
 import { configureApiClient, apiClient } from '../api/client';
-import { User } from '../types';
+import { User, Company } from '../types';
+
+export interface MeApiResponse {
+  user: User;
+  companies: (Company & { role?: string })[];
+  onboardingRequired: boolean;
+}
 
 interface AuthContextType {
   currentUser: User | null;
   firebaseUser: FirebaseUser | null;
   loading: boolean;
+  authLoading: boolean;
+  userLoading: boolean;
   token: string | null;
+  initialCompanies: (Company & { role?: string })[];
   signIn: (email: string, pass: string) => Promise<void>;
   signUp: (email: string, pass: string, displayName?: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
@@ -32,8 +41,10 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [initialCompanies, setInitialCompanies] = useState<(Company & { role?: string })[]>([]);
   const [token, setToken] = useState<string | null>(null);
-  const [loading, setLoading] = useState<boolean>(true);
+  const [authLoading, setAuthLoading] = useState<boolean>(true);
+  const [userLoading, setUserLoading] = useState<boolean>(true);
 
   // Sync token to API client
   useEffect(() => {
@@ -53,30 +64,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     );
   }, [token, firebaseUser]);
 
-  const syncBackendUser = async (idToken: string) => {
+  const syncBackendUser = useCallback(async (idToken: string): Promise<MeApiResponse | null> => {
     try {
-      const res = await apiClient<{ user: User }>('/api/app/me', {
+      setUserLoading(true);
+      const res = await apiClient<MeApiResponse>('/api/app/me', {
         headers: { Authorization: `Bearer ${idToken}` },
       });
       setCurrentUser(res.user);
+      setInitialCompanies(res.companies || []);
+      return res;
     } catch (err) {
-      console.warn('[AuthContext] Failed to sync backend user:', err);
+      console.warn('[AuthContext] Failed to sync backend user from /api/app/me:', err);
+      return null;
+    } finally {
+      setUserLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
-    // Check if dev token was stored
+    // 1. Check if dev token was stored
     const devToken = localStorage.getItem('dev_auth_token');
     const devUid = localStorage.getItem('dev_auth_uid');
     const devEmail = localStorage.getItem('dev_auth_email');
-    const devName = localStorage.getItem('dev_auth_name');
 
     if (devToken && devUid && devEmail) {
       setToken(devToken);
-      syncBackendUser(devToken).finally(() => setLoading(false));
+      syncBackendUser(devToken).finally(() => {
+        setAuthLoading(false);
+        setUserLoading(false);
+      });
       return;
     }
 
+    // 2. Subscribe to Firebase auth state
     try {
       const unsubscribe = onAuthStateChanged(auth, async (fUser) => {
         setFirebaseUser(fUser);
@@ -86,58 +106,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setToken(idToken);
             await syncBackendUser(idToken);
           } catch (err) {
-            console.error('[AuthContext] Error getting ID token:', err);
+            console.error('[AuthContext] Error retrieving Firebase ID token:', err);
           }
         } else {
           setToken(null);
           setCurrentUser(null);
+          setInitialCompanies([]);
+          setUserLoading(false);
         }
-        setLoading(false);
+        setAuthLoading(false);
       });
 
       return () => unsubscribe();
     } catch (e) {
       console.warn('[AuthContext] Firebase Auth listener fallback:', e);
-      setLoading(false);
+      setAuthLoading(false);
+      setUserLoading(false);
     }
-  }, []);
+  }, [syncBackendUser]);
 
   const signIn = async (email: string, pass: string) => {
-    setLoading(true);
+    setAuthLoading(true);
+    setUserLoading(true);
     try {
       localStorage.removeItem('dev_auth_token');
       const cred = await signInWithEmailAndPassword(auth, email, pass);
       const idToken = await cred.user.getIdToken();
       setToken(idToken);
+      setFirebaseUser(cred.user);
       await syncBackendUser(idToken);
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
+      setUserLoading(false);
     }
   };
 
   const signUp = async (email: string, pass: string, displayName?: string) => {
-    setLoading(true);
+    setAuthLoading(true);
+    setUserLoading(true);
     try {
       localStorage.removeItem('dev_auth_token');
       const cred = await createUserWithEmailAndPassword(auth, email, pass);
       const idToken = await cred.user.getIdToken();
       setToken(idToken);
+      setFirebaseUser(cred.user);
       await syncBackendUser(idToken);
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
+      setUserLoading(false);
     }
   };
 
   const signInWithGoogle = async () => {
-    setLoading(true);
+    setAuthLoading(true);
+    setUserLoading(true);
     try {
       localStorage.removeItem('dev_auth_token');
       const cred = await signInWithPopup(auth, googleProvider);
       const idToken = await cred.user.getIdToken();
       setToken(idToken);
+      setFirebaseUser(cred.user);
       await syncBackendUser(idToken);
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
+      setUserLoading(false);
     }
   };
 
@@ -146,7 +178,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const devLogin = async (email: string, name?: string) => {
-    setLoading(true);
+    setAuthLoading(true);
+    setUserLoading(true);
     try {
       const cleanUid = 'dev-' + email.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase();
       const devToken = `dev-token-${cleanUid}`;
@@ -158,7 +191,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setToken(devToken);
       await syncBackendUser(devToken);
     } finally {
-      setLoading(false);
+      setAuthLoading(false);
+      setUserLoading(false);
     }
   };
 
@@ -171,6 +205,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setToken(null);
     setCurrentUser(null);
     setFirebaseUser(null);
+    setInitialCompanies([]);
     try {
       await firebaseSignOut(auth);
     } catch (e) {
@@ -184,13 +219,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  const overallLoading = authLoading || userLoading;
+
   return (
     <AuthContext.Provider
       value={{
         currentUser,
         firebaseUser,
-        loading,
+        loading: overallLoading,
+        authLoading,
+        userLoading,
         token,
+        initialCompanies,
         signIn,
         signUp,
         signInWithGoogle,

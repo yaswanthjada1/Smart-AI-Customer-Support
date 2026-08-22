@@ -10,18 +10,41 @@ import { config } from './config/env';
 
 export const app = express();
 
-// Middlewares
-app.use(cors({
-  origin: true,
-  credentials: true,
-}));
+// 1. Iframe & Security Headers Middleware
+app.use((req: Request, res: Response, next: NextFunction) => {
+  // If public widget route, embed script, or public API, permit iframe embedding from any host
+  if (
+    req.path.startsWith('/api/public') ||
+    req.path.startsWith('/widget') ||
+    req.path.endsWith('widget.js') ||
+    req.path.endsWith('demo.html') ||
+    req.path.endsWith('test-embed.html')
+  ) {
+    res.setHeader('Content-Security-Policy', "frame-ancestors *");
+    res.removeHeader('X-Frame-Options');
+  } else if (req.path.startsWith('/api/app')) {
+    // Private authenticated dashboard APIs must not be embedded in iframes
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
+  }
+  next();
+});
 
+// 2. Global Parsers
 app.use(express.json({ limit: '25mb' }));
 app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
-// Serve static assets (widget.js, demo pages)
+// 3. Serve static client assets (widget.js, demo.html, test-embed.html)
 const clientPublicDir = path.resolve(__dirname, '../../client/public');
-app.use(express.static(clientPublicDir));
+app.use(express.static(clientPublicDir, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('widget.js') || filePath.endsWith('.html')) {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Content-Security-Policy', "frame-ancestors *");
+      res.removeHeader('X-Frame-Options');
+    }
+  }
+}));
 
 // System Health Check
 app.get('/api/health', (req: Request, res: Response) => {
@@ -49,14 +72,38 @@ app.get('/api/health/ai', async (req: Request, res: Response) => {
   res.json(health);
 });
 
-// 1. Public API (Rate-limited customer embed widget & public chat)
-app.use('/api/public', publicApiRouter);
+// 4. Public API (Public CORS open to any customer website domain)
+app.use(
+  '/api/public',
+  cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+  publicApiRouter
+);
 
-// 2. Business REST API v1 (API Key authenticated)
-app.use('/api/v1', apiV1Router);
+// 5. Business REST API v1 (API Key authenticated)
+app.use(
+  '/api/v1',
+  cors({
+    origin: '*',
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  }),
+  apiV1Router
+);
 
-// 3. App API routes (Dashboard & authenticated user operations)
-app.use('/api/app', appApiRateLimiter, appApiRouter);
+// 6. App API routes (Private dashboard operations with credentials)
+app.use(
+  '/api/app',
+  cors({
+    origin: true,
+    credentials: true,
+  }),
+  appApiRateLimiter,
+  appApiRouter
+);
 
 // 404 handler
 app.use((req: Request, res: Response) => {

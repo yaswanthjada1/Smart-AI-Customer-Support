@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Customer Website - AeroRAG Embed Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      margin: 0;
+      padding: 40px 20px;
+      background: #f8fafc;
+      color: #0f172a;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: #ffffff;
+      padding: 32px;
+      border-radius: 16px;
+      border: 1px solid #e2e8f0;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+    h1 {
+      margin-top: 0;
+      color: #1e293b;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      background: #e0e7ff;
+      color: #4338ca;
+      font-size: 12px;
+      font-weight: 600;
+      margin-bottom: 16px;
+    }
+    pre {
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 16px;
+      border-radius: 12px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+    .hint {
+      margin-top: 24px;
+      padding: 16px;
+      background: #f0fdf4;
+      border: 1px solid #bbf7d0;
+      border-radius: 12px;
+      color: #166534;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="badge">Standalone External Host Simulation</div>
+    <h1>Customer Website</h1>
+    <p>This page simulates a completely separate third-party website embedding the AeroRAG AI support chatbot.</p>
+
+    <h3>Embedded Script Tag:</h3>
+    <pre id="snippet-code">&lt;script
+  src="/widget.js"
+  data-company-id="&lt;YOUR_COMPANY_ID&gt;"&gt;
+&lt;/script&gt;</pre>
+
+    <div class="hint">
+      <strong>✨ Live Chat Active:</strong> Click the floating launcher button in the bottom right corner of this page to chat with the AI assistant.
+    </div>
+  </div>
+
+  <!-- Dynamic Widget Loader: reads companyId from URL or uses active company -->
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyId = urlParams.get('companyId') || localStorage.getItem('active_company_id') || '00000000-0000-0000-0000-000000000000';
+    
+    document.getElementById('snippet-code').textContent = 
+`<script
+  src="${window.location.origin}/widget.js"
+  data-company-id="${companyId}">
+<\/script>`;
+
+    const s = document.createElement('script');
+    s.src = '/widget.js';
+    s.setAttribute('data-company-id', companyId);
+    document.body.appendChild(s);
+  </script>
+</body>
+</html>

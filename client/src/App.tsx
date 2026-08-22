@@ -18,11 +18,32 @@ import { SettingsPage } from './pages/Settings/SettingsPage';
 import { WidgetChatPage } from './pages/Widget/WidgetChatPage';
 import { WidgetTestPage } from './pages/Widget/WidgetTestPage';
 
-// Protected Route wrapper requiring active authentication
-const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, token, loading } = useAuth();
+// 1. Guard for unauthenticated visitor auth pages (/login, /signup)
+const PublicAuthRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser, token, loading: authLoading } = useAuth();
+  const { activeCompany, companies, loading: tenantLoading } = useTenant();
 
-  if (loading) {
+  if (authLoading || tenantLoading) {
+    return <LoadingScreen message="Checking session..." />;
+  }
+
+  // If already authenticated with existing company, go to dashboard
+  if (currentUser && token) {
+    if (activeCompany || companies.length > 0) {
+      return <Navigate to="/dashboard" replace />;
+    }
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return <>{children}</>;
+};
+
+// 2. Guard requiring active authentication
+const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { currentUser, token, loading: authLoading } = useAuth();
+  const { loading: tenantLoading } = useTenant();
+
+  if (authLoading || tenantLoading) {
     return <LoadingScreen message="Verifying session..." />;
   }
 
@@ -33,16 +54,38 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// Workspace Route wrapper ensuring the user has a company workspace created
-const WorkspaceRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeCompany, companies, loading } = useTenant();
+// 3. Guard for Onboarding page (prevents existing users from seeing onboarding)
+const OnboardingRoute: React.FC = () => {
+  const { currentUser, token, loading: authLoading } = useAuth();
+  const { activeCompany, companies, loading: tenantLoading } = useTenant();
 
-  if (loading) {
+  if (authLoading || tenantLoading) {
+    return <LoadingScreen message="Verifying workspace..." />;
+  }
+
+  if (!currentUser && !token) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // If user already belongs to a company, skip onboarding directly to dashboard
+  if (activeCompany || companies.length > 0) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return <OnboardingPage />;
+};
+
+// 4. Guard requiring company membership for dashboard/app sections
+const WorkspaceRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { activeCompany, companies, loading: tenantLoading, onboardingRequired } = useTenant();
+  const { loading: authLoading } = useAuth();
+
+  if (authLoading || tenantLoading) {
     return <LoadingScreen message="Loading workspace..." />;
   }
 
   // If user has no company created yet, redirect to onboarding
-  if (!activeCompany && companies.length === 0) {
+  if (onboardingRequired || (!activeCompany && companies.length === 0)) {
     return <Navigate to="/onboarding" replace />;
   }
 
@@ -60,19 +103,33 @@ export const App: React.FC = () => {
             <Route path="/widget-test" element={<WidgetTestPage />} />
 
             {/* Public Auth Routes */}
-            <Route path="/login" element={<LoginPage />} />
-            <Route path="/signup" element={<SignupPage />} />
-            <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-
-            {/* Protected Onboarding Route */}
             <Route
-              path="/onboarding"
+              path="/login"
               element={
-                <ProtectedRoute>
-                  <OnboardingPage />
-                </ProtectedRoute>
+                <PublicAuthRoute>
+                  <LoginPage />
+                </PublicAuthRoute>
               }
             />
+            <Route
+              path="/signup"
+              element={
+                <PublicAuthRoute>
+                  <SignupPage />
+                </PublicAuthRoute>
+              }
+            />
+            <Route
+              path="/forgot-password"
+              element={
+                <PublicAuthRoute>
+                  <ForgotPasswordPage />
+                </PublicAuthRoute>
+              }
+            />
+
+            {/* Onboarding Route (Guarded) */}
+            <Route path="/onboarding" element={<OnboardingRoute />} />
 
             {/* Protected Dashboard & App Routes */}
             <Route
@@ -89,6 +146,7 @@ export const App: React.FC = () => {
               <Route path="dashboard" element={<DashboardPage />} />
               <Route path="knowledge" element={<KnowledgePage />} />
               <Route path="chatbot" element={<ChatbotPage />} />
+              <Route path="agent" element={<ChatbotPage />} />
               <Route path="conversations" element={<ConversationsPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="api" element={<ApiKeysPage />} />

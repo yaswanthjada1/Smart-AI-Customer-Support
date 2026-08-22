@@ -3,6 +3,7 @@ import multer from 'multer';
 import { authenticateFirebaseUser, AuthenticatedRequest } from '../middleware/auth';
 import { requireCompanyMembership, TenantRequest } from '../middleware/tenant';
 import { CompanyController } from '../modules/companies/companyController';
+import { CompanyService } from '../modules/companies/companyService';
 import { DocumentService } from '../modules/documents/documentService';
 import { ChatbotService } from '../modules/chatbot/chatbotService';
 import { RAGService } from '../modules/rag/ragService';
@@ -23,8 +24,17 @@ router.use(authenticateFirebaseUser);
 // ==========================================
 // 1. Current User Profile
 // ==========================================
-router.get('/me', (req: AuthenticatedRequest, res: Response) => {
-  res.json({ user: req.user });
+router.get('/me', async (req: AuthenticatedRequest, res: Response): Promise<void> => {
+  try {
+    const companies = await CompanyService.getUserCompanies(req.user!.id);
+    res.json({
+      user: req.user,
+      companies,
+      onboardingRequired: companies.length === 0,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // ==========================================
