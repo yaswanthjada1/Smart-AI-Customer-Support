@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bot, Mail, Lock, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/authErrors';
 
 export const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -21,7 +22,7 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to sign in. Please verify your credentials.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -35,7 +36,7 @@ export const LoginPage: React.FC = () => {
       navigate('/dashboard');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Google sign in failed.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }

@@ -33,9 +33,13 @@ export const ApiKeysPage: React.FC = () => {
   const [activeDocTab, setActiveDocTab] = useState<'javascript' | 'curl' | 'python'>('javascript');
 
   // Derive public URL from environment or current window origin
+  const isLocalhost = typeof window !== 'undefined' && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+  const envWidgetUrl = (import.meta as any).env?.VITE_WIDGET_BASE_URL;
+
   const widgetBaseUrl =
-    (import.meta as any).env?.VITE_WIDGET_BASE_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173');
+    envWidgetUrl && (envWidgetUrl !== 'http://localhost:5173' || isLocalhost)
+      ? envWidgetUrl
+      : (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173');
 
   const apiPublicUrl =
     (import.meta as any).env?.VITE_API_URL ||

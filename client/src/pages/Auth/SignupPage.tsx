@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Bot, Mail, Lock, User as UserIcon, AlertCircle, ArrowRight } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
+import { getAuthErrorMessage } from '../../lib/authErrors';
 
 export const SignupPage: React.FC = () => {
   const [displayName, setDisplayName] = useState('');
@@ -27,7 +28,7 @@ export const SignupPage: React.FC = () => {
       navigate('/onboarding');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Failed to create account.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -41,7 +42,7 @@ export const SignupPage: React.FC = () => {
       navigate('/onboarding');
     } catch (err: any) {
       console.error(err);
-      setError(err.message || 'Google signup failed.');
+      setError(getAuthErrorMessage(err));
     } finally {
       setLoading(false);
     }
