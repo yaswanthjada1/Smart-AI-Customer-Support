@@ -1,0 +1,12 @@
+{
+  "name": "multi-tenant-rag-saas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Multi-Tenant RAG Customer Support SaaS Platform",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix server run build && npm --prefix client run build",
+    "test": "npm --prefix server run test"
+  }
+}
