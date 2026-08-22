@@ -44,7 +44,14 @@ export async function apiClient<T = any>(endpoint: string, options: RequestOptio
     }
   }
 
+  const apiBaseUrl = (import.meta as any).env?.VITE_API_URL
+    ? String((import.meta as any).env.VITE_API_URL).replace(/\/+$/, '')
+    : '';
+
   let url = endpoint;
+  if (apiBaseUrl && endpoint.startsWith('/')) {
+    url = `${apiBaseUrl}${endpoint}`;
+  }
   if (options.params) {
     const searchParams = new URLSearchParams();
     Object.entries(options.params).forEach(([key, val]) => {

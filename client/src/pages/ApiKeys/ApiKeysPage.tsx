@@ -39,7 +39,7 @@ export const ApiKeysPage: React.FC = () => {
 
   const apiPublicUrl =
     (import.meta as any).env?.VITE_API_URL ||
-    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5000');
+    (typeof window !== 'undefined' ? window.location.origin : 'https://desktop-v52nf2o.tail4f42d7.ts.net');
 
   const companyId = activeCompany?.id || 'YOUR_COMPANY_ID';
   const embedSnippet = `<script\n  src="${widgetBaseUrl}/widget.js"\n  data-company-id="${companyId}">\n</script>`;
@@ -388,7 +388,7 @@ export const ApiKeysPage: React.FC = () => {
 
           {activeDocTab === 'javascript' && (
             <div className="p-4 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto leading-relaxed border border-slate-800">
-              <pre>{`const response = await fetch("${widgetBaseUrl}/api/public/chat", {
+              <pre>{`const response = await fetch("${apiPublicUrl}/api/public/chat", {
   method: "POST",
   headers: {
     "Authorization": "Bearer ar_live_xxxxxxxxxxxxxxxx",
@@ -408,7 +408,7 @@ console.log(data.sources);`}</pre>
 
           {activeDocTab === 'curl' && (
             <div className="p-4 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto leading-relaxed border border-slate-800">
-              <pre>{`curl -X POST ${widgetBaseUrl}/api/public/chat \\
+              <pre>{`curl -X POST ${apiPublicUrl}/api/public/chat \\
   -H "Authorization: Bearer ar_live_xxxxxxxxxxxxxxxx" \\
   -H "Content-Type: application/json" \\
   -d '{
@@ -422,7 +422,7 @@ console.log(data.sources);`}</pre>
             <div className="p-4 rounded-xl bg-slate-900 text-slate-100 text-xs font-mono overflow-x-auto leading-relaxed border border-slate-800">
               <pre>{`import requests
 
-url = "${widgetBaseUrl}/api/public/chat"
+url = "${apiPublicUrl}/api/public/chat"
 headers = {
     "Authorization": "Bearer ar_live_xxxxxxxxxxxxxxxx",
     "Content-Type": "application/json"

@@ -64,6 +64,10 @@ export const WidgetChatPage: React.FC = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const apiBaseUrl = (import.meta as any).env?.VITE_API_URL
+    ? String((import.meta as any).env.VITE_API_URL).replace(/\/+$/, '')
+    : '';
+
   // 1. Initialize session & load company configuration
   useEffect(() => {
     if (!companyId) {
@@ -84,7 +88,9 @@ export const WidgetChatPage: React.FC = () => {
     // Fetch Public Widget Config
     const fetchConfig = async () => {
       try {
-        const res = await fetch(`/api/public/widget-config/${encodeURIComponent(companyId)}`);
+        const configEndpoint = `/api/public/widget-config/${encodeURIComponent(companyId)}`;
+        const configUrl = apiBaseUrl ? `${apiBaseUrl}${configEndpoint}` : configEndpoint;
+        const res = await fetch(configUrl);
         if (!res.ok) {
           throw new Error('Company chatbot not found or disabled.');
         }
@@ -178,7 +184,8 @@ export const WidgetChatPage: React.FC = () => {
         headers['Authorization'] = `Bearer ${widgetToken}`;
       }
 
-      const res = await fetch('/api/public/chat', {
+      const chatUrl = apiBaseUrl ? `${apiBaseUrl}/api/public/chat` : '/api/public/chat';
+      const res = await fetch(chatUrl, {
         method: 'POST',
         headers,
         body: JSON.stringify({
