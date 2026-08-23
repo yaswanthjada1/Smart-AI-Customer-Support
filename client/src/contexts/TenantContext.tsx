@@ -17,44 +17,10 @@ interface TenantContextType {
 const TenantContext = createContext<TenantContextType | undefined>(undefined);
 
 export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { currentUser, token, initialCompanies, loading: authLoading } = useAuth();
+  const { currentUser, token, initialCompanies, loading: authLoading, refreshUserProfile } = useAuth();
   const [companies, setCompanies] = useState<Company[]>([]);
   const [activeCompany, setActiveCompany] = useState<Company | null>(null);
   const [tenantLoading, setTenantLoading] = useState<boolean>(true);
-
-  // Sync initial companies from AuthContext (/api/app/me)
-  useEffect(() => {
-    if (authLoading) {
-      setTenantLoading(true);
-      return;
-    }
-
-    if (!token || !currentUser) {
-      setCompanies([]);
-      setActiveCompany(null);
-      setTenantLoading(false);
-      return;
-    }
-
-    // Populate from /api/app/me response
-    const comps = initialCompanies || [];
-    setCompanies(comps);
-
-    const savedId = localStorage.getItem('active_company_id');
-    const found = comps.find((c) => c.id === savedId);
-
-    if (found) {
-      setActiveCompany(found);
-    } else if (comps.length > 0) {
-      setActiveCompany(comps[0]);
-      localStorage.setItem('active_company_id', comps[0].id);
-    } else {
-      setActiveCompany(null);
-      localStorage.removeItem('active_company_id');
-    }
-
-    setTenantLoading(false);
-  }, [authLoading, token, currentUser, initialCompanies]);
 
   const fetchCompanies = useCallback(async () => {
     if (!token || !currentUser) {
@@ -89,6 +55,41 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [token, currentUser]);
 
+  // Sync initial companies from AuthContext (/api/app/me) or fetch directly
+  useEffect(() => {
+    if (authLoading) {
+      setTenantLoading(true);
+      return;
+    }
+
+    if (!token || !currentUser) {
+      setCompanies([]);
+      setActiveCompany(null);
+      setTenantLoading(false);
+      return;
+    }
+
+    // Populate from /api/app/me response
+    const comps = initialCompanies || [];
+    if (comps.length > 0) {
+      setCompanies(comps);
+
+      const savedId = localStorage.getItem('active_company_id');
+      const found = comps.find((c) => c.id === savedId);
+
+      if (found) {
+        setActiveCompany(found);
+      } else {
+        setActiveCompany(comps[0]);
+        localStorage.setItem('active_company_id', comps[0].id);
+      }
+      setTenantLoading(false);
+    } else {
+      // If initialCompanies is empty, verify with /api/app/companies directly
+      fetchCompanies();
+    }
+  }, [authLoading, token, currentUser, initialCompanies, fetchCompanies]);
+
   const switchCompany = (companyId: string) => {
     const target = companies.find((c) => c.id === companyId);
     if (target) {
@@ -104,9 +105,19 @@ export const TenantProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
 
     const newCompany = res.company;
-    setCompanies((prev) => [newCompany, ...prev]);
+    setCompanies((prev) => {
+      const exists = prev.some((c) => c.id === newCompany.id);
+      return exists ? prev : [newCompany, ...prev];
+    });
     setActiveCompany(newCompany);
     localStorage.setItem('active_company_id', newCompany.id);
+
+    // Synchronize AuthContext (which updates initialCompanies) and re-verify list
+    if (refreshUserProfile) {
+      await refreshUserProfile();
+    }
+    await fetchCompanies();
+
     return newCompany;
   };
 
