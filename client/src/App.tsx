@@ -54,10 +54,10 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
-// 3. Guard for Onboarding page
+// 3. Guard for Onboarding page (prevents existing users from seeing onboarding)
 const OnboardingRoute: React.FC = () => {
   const { currentUser, token, loading: authLoading } = useAuth();
-  const { loading: tenantLoading } = useTenant();
+  const { activeCompany, companies, loading: tenantLoading } = useTenant();
 
   if (authLoading || tenantLoading) {
     return <LoadingScreen message="Verifying workspace..." />;
@@ -65,6 +65,11 @@ const OnboardingRoute: React.FC = () => {
 
   if (!currentUser && !token) {
     return <Navigate to="/login" replace />;
+  }
+
+  // If user already belongs to a company, skip onboarding directly to dashboard
+  if (activeCompany || companies.length > 0) {
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <OnboardingPage />;

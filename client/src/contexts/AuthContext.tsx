@@ -214,19 +214,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const refreshUserProfile = async () => {
-    let activeToken = token;
-    if (!activeToken && firebaseUser) {
-      try {
-        activeToken = await firebaseUser.getIdToken();
-      } catch (e) {
-        activeToken = null;
-      }
-    }
-    if (!activeToken) {
-      activeToken = localStorage.getItem('dev_auth_token');
-    }
-    if (activeToken) {
-      await syncBackendUser(activeToken);
+    if (token) {
+      await syncBackendUser(token);
     }
   };
 
