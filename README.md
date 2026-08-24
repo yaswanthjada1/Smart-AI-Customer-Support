@@ -1,202 +1,186 @@
-# Smart AI Customer Support & RAG Knowledge Platform
+<div align="center">
 
-> **Note**: This documentation describes the existing codebase, architecture, scripts, configuration, and workflows without altering application behavior.
+# ðŸ§  Smart AI Customer Support & RAG Knowledge Platform
 
-A full-stack, multi-tenant AI Customer Support and Retrieval-Augmented Generation (RAG) platform. The application empowers organizations to create dedicated workspaces, upload internal knowledge documents (PDF, DOCX, TXT, MD), index them into vector embeddings, customize interactive customer-facing chat widgets, and deploy AI assistants via iframe embed scripts or REST APIs.
+**A full-stack, multi-tenant AI Customer Support platform powered by Retrieval-Augmented Generation (RAG).**
 
----
+Upload internal knowledge, index it into vector embeddings, and deploy branded AI support assistants via embeddable widgets or a REST API â€” running fully offline with Ollama or in the cloud with Gemini/OpenAI.
 
-## 📑 Table of Contents
+[![Node](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![React](https://img.shields.io/badge/React-Vite-61DAFB?logo=react&logoColor=white)](https://react.dev)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-4169E1?logo=postgresql&logoColor=white)](https://github.com/pgvector/pgvector)
+[![Ollama](https://img.shields.io/badge/Local%20AI-Ollama-000000)](https://ollama.com)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](#license)
 
-- [1. Project Overview](#1-project-overview)
-- [2. Key Features](#2-key-features)
-- [3. Project Structure](#3-project-structure)
-- [4. Prerequisites & System Requirements](#4-prerequisites--system-requirements)
-- [5. Installation](#5-installation)
-- [6. Environment Configuration](#6-environment-configuration)
-- [7. Running the Application Locally](#7-running-the-application-locally)
-- [8. Available Scripts & Commands](#8-available-scripts--commands)
-- [9. Architecture & Core Systems](#9-architecture--core-systems)
-  - [Authentication Flow](#authentication-flow)
-  - [Database & Multi-Tenant Architecture](#database--multi-tenant-architecture)
-  - [AI & Ollama Integration](#ai--ollama-integration)
-  - [Public Widget & Embed System](#public-widget--embed-system)
-- [10. Deployment](#10-deployment)
-- [11. Troubleshooting Guide](#11-troubleshooting-guide)
+</div>
 
 ---
 
-## 1. Project Overview
+## ðŸ“‘ Table of Contents
 
-**Smart AI Customer Support** provides an end-to-end multi-tenant solution for automated customer support:
-- **Tenant Management**: Multi-workspace organization model where users can create, manage, and switch between company workspaces with role-based access control (`owner`, `admin`, `member`).
-- **Knowledge Ingestion & Vector Search**: Automatic text extraction and chunking from PDF, DOCX, TXT, and Markdown files, transformed into 1024-dimensional dense vector embeddings with cosine similarity distance ranking.
-- **RAG Inference Pipeline**: Grounded retrieval and response synthesis using either local offline AI models (via Ollama) or cloud providers (Google Gemini / OpenAI).
-- **Customizable Customer Widget**: White-label, floating chat widget with live theme customization, greeting messages, and secure iframe isolation.
-- **Developer API & Webhooks**: Programmatic chat endpoints protected by scoped API keys (`live_` / `test_`) with granular rate limiting.
-
----
-
-## 2. Key Features
-
-- **Multi-Tenant Isolation**: Strict logical database isolation using `company_id` foreign keys and workspace routing guards.
-- **Multi-Format Document Parsing**:
-  - PDF extraction via `pdf-parse`
-  - DOCX extraction via `mammoth`
-  - Raw text / Markdown via UTF-8 buffer ingestion
-- **Vector Search & Embedding Dimensions**: Standardized 1024-dimensional embeddings with PostgreSQL `pgvector` (`vector(1024)`) and cosine distance indexing (`<=>`).
-- **Flexible LLM & Embedding Providers**:
-  - **Local AI (Ollama)**: Offline, privacy-first generation and embeddings (e.g. `qwen3:1.7b` and `qwen3-embedding:0.6b` at `http://localhost:11434`).
-  - **Google Gemini**: Cloud-scale generation (`gemini-2.0-flash`) and embeddings (`text-embedding-004`).
-- **Authentication**:
-  - Firebase Authentication (Email/Password, Google OAuth, Password Reset)
-  - Development bypass mode for automated integration testing and local simulation.
-- **Dual Database Support**:
-  - Standard PostgreSQL with `pgvector` extension
-  - Embedded in-process PostgreSQL (**PGlite**) with dynamic `pgvector` WASM loading for zero-config local development and testing.
-- **Live Embeddable Widget**: Standalone vanilla JavaScript widget loader (`widget.js`) with responsive drawer UI (`demo.html`, `test-embed.html`) and CSP `frame-ancestors *` support.
-- **Audit Logs & Analytics**: Track query volumes, resolution rates, document chunk counts, and conversation histories.
+1. [Overview](#-overview)
+2. [Key Features](#-key-features)
+3. [Tech Stack](#-tech-stack)
+4. [Project Structure](#-project-structure)
+5. [Prerequisites](#-prerequisites)
+6. [Installation](#-installation)
+7. [Environment Configuration](#-environment-configuration)
+8. [Running Locally](#-running-locally)
+9. [Available Scripts](#-available-scripts)
+10. [Architecture & Core Systems](#-architecture--core-systems)
+11. [Embedding the Widget](#-embedding-the-widget)
+12. [Deployment](#-deployment)
+13. [Troubleshooting](#-troubleshooting)
+14. [Contributing](#-contributing)
+15. [License](#-license)
 
 ---
 
-## 3. Project Structure
+## ðŸ“– Overview
 
-The repository is organized into a decoupled client-server architecture:
+**Smart AI Customer Support** gives organizations an end-to-end solution for automated, knowledge-grounded customer support:
+
+| Capability | Description |
+|---|---|
+| ðŸ¢ **Multi-Tenant Workspaces** | Create, manage, and switch between company workspaces with role-based access (`owner`, `admin`, `member`). |
+| ðŸ“š **Knowledge Ingestion** | Automatic text extraction and chunking from PDF, DOCX, TXT, and Markdown files. |
+| ðŸ” **Vector Search** | 1024-dimensional embeddings with cosine similarity ranking via `pgvector`. |
+| ðŸ¤– **RAG Inference** | Grounded response synthesis using local (Ollama) or cloud (Gemini/OpenAI) models. |
+| ðŸ’¬ **Embeddable Widget** | White-label, floating chat widget with live theming and secure iframe isolation. |
+| ðŸ”‘ **Developer API** | Scoped API keys (`live_` / `test_`) with granular rate limiting for programmatic access. |
+
+---
+
+## âœ¨ Key Features
+
+- **Strict Tenant Isolation** â€” every table scoped by `company_id`, enforced by workspace routing guards.
+- **Multi-Format Document Parsing** â€” PDF (`pdf-parse`), DOCX (`mammoth`), and raw TXT/Markdown via UTF-8 ingestion.
+- **Flexible AI Providers** â€” swap between local and cloud models without code changes:
+  - **Ollama** (offline, privacy-first): `qwen3:1.7b` for generation, `qwen3-embedding:0.6b` for embeddings.
+  - **Google Gemini** (cloud-scale): `gemini-2.0-flash` for generation, `text-embedding-004` for embeddings.
+- **Firebase Authentication** â€” Email/Password, Google OAuth, password reset, plus a dev-bypass mode for automated testing.
+- **Dual Database Support** â€” standard PostgreSQL + `pgvector`, or zero-config embedded **PGlite** with WASM `pgvector` for local development.
+- **Live Embeddable Widget** â€” a vanilla JS loader (`widget.js`) with a responsive drawer UI and `frame-ancestors *` CSP support.
+- **Audit Logs & Analytics** â€” track query volume, resolution rates, chunk counts, and conversation history.
+
+---
+
+## ðŸ›  Tech Stack
+
+| Layer | Technology |
+|---|---|
+| Frontend | React, Vite, TypeScript, Tailwind CSS |
+| Backend | Node.js, Express, TypeScript |
+| Database | PostgreSQL + pgvector (or embedded PGlite) |
+| Auth | Firebase Authentication |
+| AI / Embeddings | Ollama (local) Â· Google Gemini / OpenAI (cloud) |
+| Testing | Vitest |
+| Deployment | Vercel (frontend) Â· Node container/VM (backend) |
+
+---
+
+## ðŸ“‚ Project Structure
 
 ```
 team-pro/
-├── client/                     # Frontend Single Page Application (React + Vite)
-│   ├── public/                 # Static assets & embed widget distribution
-│   │   ├── demo.html           # Interactive standalone embed widget demo
-│   │   ├── test-embed.html     # Verification page for iframe embed
-│   │   ├── widget.html         # Hosted chat interface loaded in widget iframe
-│   │   └── widget.js           # Client-side JavaScript snippet for external websites
-│   ├── src/
-│   │   ├── api/
-│   │   │   └── client.ts       # Centralized Fetch client with dynamic Auth & Tenant headers
-│   │   ├── components/         # Reusable UI component library (Layout, Modals, Navbar, etc.)
-│   │   ├── contexts/
-│   │   │   ├── AuthContext.tsx # Firebase auth listener & user profile synchronization
-│   │   │   └── TenantContext.tsx # Company/workspace state & active tenant switching
-│   │   ├── lib/
-│   │   │   └── firebase.ts     # Firebase Web SDK initialization
-│   │   ├── pages/              # Application views (Dashboard, Chat, Documents, Settings, etc.)
-│   │   ├── types/              # Frontend TypeScript definitions
-│   │   ├── App.tsx             # Route declarations & tenant protection guards
-│   │   ├── index.css           # Global Tailwind CSS and styling rules
-│   │   └── main.tsx            # React application entry point
-│   ├── package.json            # Frontend scripts and dependencies
-│   ├── tailwind.config.js      # Tailwind CSS configuration
-│   ├── tsconfig.json           # Frontend TypeScript compiler configuration
-│   ├── vercel.json             # Vercel SPA routing & CORS rewrite rules
-│   └── vite.config.ts          # Vite build tool & development proxy configuration
-│
-├── server/                     # Backend API & RAG Engine (Node.js + Express + TypeScript)
-│   ├── data/                   # Embedded database storage (PGlite)
-│   ├── uploads/                # Local file storage for ingested knowledge documents
-│   ├── src/
-│   │   ├── config/
-│   │   │   ├── env.ts          # Validated environment settings & provider selectors
-│   │   │   └── firebase.ts     # Firebase Admin SDK initialization
-│   │   ├── db/
-│   │   │   ├── index.ts        # Database connection pool (PostgreSQL / PGlite auto-switch)
-│   │   │   └── migrations/     # SQL schema migrations (001_initial_schema, 002_vector_1024)
-│   │   ├── middleware/
-│   │   │   ├── auth.ts         # Bearer token verification (Firebase ID Token & dev tokens)
-│   │   │   ├── rateLimit.ts    # Rate limiting for public and authenticated routes
-│   │   │   └── tenant.ts       # X-Company-Id verification and tenant role resolution
-│   │   ├── modules/            # Domain-driven feature controllers & services
-│   │   │   ├── analytics/      # Usage metrics and query reporting
-│   │   │   ├── apiKeys/        # Scoped developer API key generation and hashing
-│   │   │   ├── chatbot/        # Widget customization and branding configs
-│   │   │   ├── companies/      # Workspace creation, member management, and invites
-│   │   │   ├── conversations/  # Conversation threads and message persistence
-│   │   │   ├── documents/      # File upload, document chunking, and vector indexing
-│   │   │   └── rag/            # Vector similarity search and context-grounded prompting
-│   │   ├── routes/
-│   │   │   ├── apiV1.ts        # External developer REST API v1 (API Key authenticated)
-│   │   │   ├── appApi.ts       # Internal Dashboard REST API (Session authenticated)
-│   │   │   └── publicApi.ts    # Public Widget API (CORS open, rate limited)
-│   │   ├── services/
-│   │   │   ├── ai/             # LLM & Embedding provider implementations (Ollama, Gemini)
-│   │   │   └── storage/        # File storage abstraction (Firebase Storage / Local Disk)
-│   │   ├── app.ts              # Express application configuration & CORS policies
-│   │   └── index.ts            # Server bootstrap and port listener
-│   ├── __tests__/              # Automated test suites (Auth, Multitenancy, RAG, Widget)
-│   ├── package.json            # Server dependencies and scripts
-│   ├── tsconfig.json           # Server TypeScript configuration
-│   └── vitest.config.ts        # Vitest test runner configuration
-│
-└── README.md                   # Project documentation
+â”œâ”€â”€ client/                       # React + Vite frontend
+â”‚   â”œâ”€â”€ public/
+â”‚   â”‚   â”œâ”€â”€ demo.html             # Standalone embed widget demo
+â”‚   â”‚   â”œâ”€â”€ test-embed.html       # Iframe embed verification page
+â”‚   â”‚   â”œâ”€â”€ widget.html           # Hosted chat interface (iframe target)
+â”‚   â”‚   â””â”€â”€ widget.js             # Embeddable widget loader script
+â”‚   â””â”€â”€ src/
+â”‚       â”œâ”€â”€ api/client.ts         # Fetch client w/ Auth & Tenant headers
+â”‚       â”œâ”€â”€ components/           # Reusable UI components
+â”‚       â”œâ”€â”€ contexts/             # AuthContext, TenantContext
+â”‚       â”œâ”€â”€ lib/firebase.ts       # Firebase Web SDK init
+â”‚       â”œâ”€â”€ pages/                # App views (Dashboard, Chat, Docs, Settingsâ€¦)
+â”‚       â”œâ”€â”€ App.tsx               # Routes & tenant guards
+â”‚       â””â”€â”€ main.tsx              # App entry point
+â”‚
+â”œâ”€â”€ server/                       # Express + TypeScript backend
+â”‚   â”œâ”€â”€ data/                     # PGlite embedded DB storage
+â”‚   â”œâ”€â”€ uploads/                  # Local knowledge document storage
+â”‚   â””â”€â”€ src/
+â”‚       â”œâ”€â”€ config/                # env.ts, firebase.ts
+â”‚       â”œâ”€â”€ db/                    # Connection pool + SQL migrations
+â”‚       â”œâ”€â”€ middleware/            # auth.ts, rateLimit.ts, tenant.ts
+â”‚       â”œâ”€â”€ modules/               # analytics, apiKeys, chatbot, companies,
+â”‚       â”‚                          # conversations, documents, rag
+â”‚       â”œâ”€â”€ routes/                # apiV1.ts, appApi.ts, publicApi.ts
+â”‚       â”œâ”€â”€ services/              # ai/ (LLM+embeddings), storage/
+â”‚       â”œâ”€â”€ app.ts                 # Express app & CORS config
+â”‚       â””â”€â”€ index.ts               # Server bootstrap
+â”‚   â””â”€â”€ __tests__/                 # Vitest test suites
+â”‚
+â””â”€â”€ README.md
 ```
 
 ---
 
-## 4. Prerequisites & System Requirements
+## âœ… Prerequisites
 
-Ensure the following tools are installed on your environment before running the project:
+| Requirement | Version | Notes |
+|---|---|---|
+| Node.js | v18+ (v20/v22 recommended) | |
+| npm | v9+ | |
+| Git | latest | |
+| Ollama | latest | Optional â€” only needed for local AI inference |
+| PostgreSQL | 15+ with `pgvector` | Optional â€” falls back to embedded PGlite |
 
-- **Node.js**: Version `v18.0.0` or higher (Node `v20+` or `v22+` recommended).
-- **npm**: Version `v9.0.0` or higher.
-- **Git**: For version control.
-- **Ollama** *(Optional for local AI)*: Required if using local LLM inference or embeddings without cloud API keys.
-  - Download from: [https://ollama.com](https://ollama.com)
-  - Models used by default:
-    ```bash
-    ollama pull qwen3:1.7b
-    ollama pull qwen3-embedding:0.6b
-    ```
-- **PostgreSQL** *(Optional)*: PostgreSQL 15+ with `pgvector` extension. If not installed or configured, the server automatically defaults to embedded **PGlite** with persistence in `server/data/pglite_db`.
+If using local AI, pull the default models:
+
+```bash
+ollama pull qwen3:1.7b
+ollama pull qwen3-embedding:0.6b
+```
 
 ---
 
-## 5. Installation
-
-Clone the repository and install dependencies for both `server` and `client`:
+## ðŸ“¦ Installation
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/yaswanthjada1/Smart-AI-Customer-Support.git
 cd "team pro"
 
-# 2. Install Server Dependencies
+# 2. Install server dependencies
 cd server
 npm install
 
-# 3. Install Client Dependencies
+# 3. Install client dependencies
 cd ../client
 npm install
 ```
 
 ---
 
-## 6. Environment Configuration
+## âš™ï¸ Environment Configuration
 
-### Backend Configuration (`server/.env`)
-
-Create a `.env` file in the `server/` directory (or root if configured):
+### Backend â€” `server/.env`
 
 ```env
-# Server Port & Environment
+# Server
 PORT=5000
 NODE_ENV=development
 
-# Database Connection (Optional - defaults to embedded PGlite if empty)
+# Database (optional â€” defaults to embedded PGlite if unset)
 # DATABASE_URL=postgres://postgres:postgres@localhost:5432/rag_support
 # PGLITE_DIR=./data/pglite_db
 
-# Firebase Admin SDK (For User Authentication & Cloud Storage)
+# Firebase Admin SDK
 FIREBASE_PROJECT_ID=smart-ai-customer-suppor-24d0e
 FIREBASE_CLIENT_EMAIL=
 FIREBASE_PRIVATE_KEY=
 FIREBASE_STORAGE_BUCKET=smart-ai-customer-suppor-24d0e.firebasestorage.app
 
-# Local AI Configuration (Ollama)
+# Local AI (Ollama)
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_GENERATION_MODEL=qwen3:1.7b
 OLLAMA_EMBEDDING_MODEL=qwen3-embedding:0.6b
 
-# AI Provider Selection ('ollama' | 'gemini' | 'openai' | 'mock')
+# AI Provider Selection: 'ollama' | 'gemini' | 'openai' | 'mock'
 LLM_PROVIDER=ollama
 LLM_MODEL=qwen3:1.7b
 LLM_API_KEY=
@@ -206,114 +190,114 @@ EMBEDDING_MODEL=qwen3-embedding:0.6b
 EMBEDDING_DIMENSIONS=1024
 EMBEDDING_API_KEY=
 
-# Storage Provider ('local' | 'firebase')
+# Storage: 'local' | 'firebase'
 STORAGE_PROVIDER=local
 
-# Public Widget Rate Limiting
+# Public widget rate limiting
 PUBLIC_CHAT_RATE_WINDOW=600
 PUBLIC_CHAT_RATE_LIMIT=30
 ```
 
-### Frontend Configuration (`client/.env`)
-
-Create a `.env` file in the `client/` directory:
+### Frontend â€” `client/.env`
 
 ```env
-# Backend API Base URL (Leave blank if using Vite proxy, or specify server URL)
 VITE_API_URL=http://localhost:5000
 
-# Firebase Web Client Configuration
-VITE_FIREBASE_API_KEY=AIzaSyDF1tp_nkMUyiT-9Z5WF205XlGMTj1hKZ4
-VITE_FIREBASE_AUTH_DOMAIN=smart-ai-customer-suppor-24d0e.firebaseapp.com
-VITE_FIREBASE_PROJECT_ID=smart-ai-customer-suppor-24d0e
-VITE_FIREBASE_STORAGE_BUCKET=smart-ai-customer-suppor-24d0e.firebasestorage.app
-VITE_FIREBASE_MESSAGING_SENDER_ID=58034439041
-VITE_FIREBASE_APP_ID=1:58034439041:web:e35678f28f4fc737549e80
-VITE_FIREBASE_MEASUREMENT_ID=G-JQKY8Y7PYB
+VITE_FIREBASE_API_KEY=your_firebase_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_project.firebasestorage.app
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_MEASUREMENT_ID=your_measurement_id
 ```
+
+> âš ï¸ **Never commit real credentials.** Keep `.env` files out of version control and rotate any keys that were previously exposed.
 
 ---
 
-## 7. Running the Application Locally
+## â–¶ï¸ Running Locally
 
-### Step 1: Start Ollama (If using local AI)
-Ensure Ollama is running and the required models are pulled:
+**1. Start Ollama** *(if using local AI)*
+
 ```bash
 ollama serve
-# Verify models in another terminal:
-ollama list
+ollama list   # verify models are pulled
 ```
 
-### Step 2: Start the Backend Server
-From the `server/` directory:
+**2. Start the backend**
+
 ```bash
 cd server
 npm run dev
 ```
-The API server will start at `http://localhost:5000`. You can verify system health by opening `http://localhost:5000/api/health`.
+Runs at `http://localhost:5000` â€” health check: `http://localhost:5000/api/health`
 
-### Step 3: Start the Frontend Client
-In a separate terminal, from the `client/` directory:
+**3. Start the frontend**
+
 ```bash
 cd client
 npm run dev
 ```
-The Vite development server will start at `http://localhost:5173`. Open this URL in your web browser to access the dashboard.
+Runs at `http://localhost:5173`
 
 ---
 
-## 8. Available Scripts & Commands
+## ðŸ“œ Available Scripts
 
-All scripts documented below exist directly in the project configuration files:
+### Backend (`server/package.json`)
 
-### Backend Scripts (`server/package.json`)
+| Command | Runs | Description |
+|---|---|---|
+| `npm run dev` | `nodemon --watch src -e ts --exec ts-node src/index.ts` | Dev server with live TypeScript reload |
+| `npm run build` | `tsc` | Compile to `dist/` |
+| `npm run start` | `node dist/index.js` | Run compiled production server |
+| `npm run test` | `vitest run --fileParallelism=false` | Run backend test suite |
+| `npm run migrate` | `ts-node src/db/runMigrations.ts` | Apply SQL schema migrations |
 
-| Command | Script | Description |
-| :--- | :--- | :--- |
-| `npm run dev` | `nodemon --watch src -e ts --exec ts-node src/index.ts` | Starts the Express server with live TypeScript reloading via nodemon. |
-| `npm run build` | `tsc` | Compiles backend TypeScript source code into production JavaScript in `dist/`. |
-| `npm run start` | `node dist/index.js` | Runs the compiled production server from `dist/`. |
-| `npm run test` | `vitest run --fileParallelism=false` | Executes the backend automated test suite using Vitest. |
-| `npm run migrate` | `ts-node src/db/runMigrations.ts` | Manually runs SQL schema migrations against the configured database. |
+### Frontend (`client/package.json`)
 
-### Frontend Scripts (`client/package.json`)
-
-| Command | Script | Description |
-| :--- | :--- | :--- |
-| `npm run dev` | `vite` | Starts the Vite development server with Hot Module Replacement (HMR). |
-| `npm run build` | `tsc && vite build` | Validates TypeScript types and builds the production bundle into `dist/`. |
-| `npm run preview` | `vite preview` | Locally serves the production build output from `dist/` for testing. |
+| Command | Runs | Description |
+|---|---|---|
+| `npm run dev` | `vite` | Dev server with HMR |
+| `npm run build` | `tsc && vite build` | Type-check and build production bundle |
+| `npm run preview` | `vite preview` | Preview the production build locally |
 
 ---
 
-## 9. Architecture & Core Systems
+## ðŸ— Architecture & Core Systems
 
 ### Authentication Flow
-1. **Frontend Authentication**: Users sign in via Firebase Auth (Email/Password, Google popup) inside `AuthContext.tsx`.
-2. **Token Passing**: On every authenticated API request, `apiClient` in `client/src/api/client.ts` attaches the Firebase JWT as an `Authorization: Bearer <idToken>` header.
-3. **Backend Validation**: In `server/src/middleware/auth.ts`, the Express middleware validates the token with `firebase-admin` (or resolves dev simulation tokens in development mode), decoding the `uid`, `email`, and `name`.
-4. **User Synchronization**: The backend dynamically provisions or updates the corresponding user row in the PostgreSQL `users` table via `syncUser()`.
+1. User signs in via Firebase Auth (Email/Password or Google) in `AuthContext.tsx`.
+2. `apiClient` (`client/src/api/client.ts`) attaches the Firebase ID token as `Authorization: Bearer <idToken>` on every request.
+3. `server/src/middleware/auth.ts` verifies the token via `firebase-admin` (or resolves dev tokens in development), extracting `uid`, `email`, `name`.
+4. The backend upserts the user into the `users` table via `syncUser()`.
 
-### Database & Multi-Tenant Architecture
-- **Automatic Engine Fallback**: The database module `server/src/db/index.ts` first attempts connection to `DATABASE_URL`. If unavailable, it seamlessly initializes **PGlite** (in-process PostgreSQL) with vector extensions enabled.
-- **Tenant Scoping**: All tenant data (`documents`, `document_chunks`, `conversations`, `messages`, `api_keys`, `chatbot_configs`) references `company_id`.
-- **Row-Level Tenancy Checks**: Requests to `/api/app/*` pass through `requireTenantMembership` middleware in `server/src/middleware/tenant.ts`, verifying that the requesting user possesses an active membership in `company_members`.
+### Database & Multi-Tenancy
+- `server/src/db/index.ts` attempts `DATABASE_URL` first, falling back to embedded **PGlite** with vector extensions if unavailable.
+- Tenant-scoped tables (`documents`, `document_chunks`, `conversations`, `messages`, `api_keys`, `chatbot_configs`) all reference `company_id`.
+- `/api/app/*` routes pass through `requireTenantMembership` (`server/src/middleware/tenant.ts`), verifying active membership in `company_members`.
 
-### AI & Ollama Integration
-- **LLM Abstraction**: AI operations are decoupled behind provider interfaces in `server/src/services/ai/`.
-- **Ollama Embedding**: Handled via `OllamaProvider.generateEmbedding` and `generateEmbeddings` targeting the `/api/embed` endpoint with `qwen3-embedding:0.6b` (1024-dim output).
-- **RAG Retrieval**: The RAG service (`server/src/modules/rag/ragService.ts`) performs vector similarity ranking:
-  ```sql
-  SELECT chunk_id, content, 1 - (embedding <=> $1::vector) AS similarity
-  FROM document_chunks
-  WHERE company_id = $2
-  ORDER BY embedding <=> $1::vector ASC
-  LIMIT 5;
-  ```
-- **Context Injection**: Retrieved relevant chunks are synthesized into structured system prompts with strict grounding instructions to prevent hallucinations.
+### AI & RAG Pipeline
+- LLM/embedding operations are abstracted behind provider interfaces in `server/src/services/ai/`.
+- `OllamaProvider.generateEmbedding(s)` calls `/api/embed` with `qwen3-embedding:0.6b` â†’ 1024-dim vectors.
+- Retrieval (`server/src/modules/rag/ragService.ts`) ranks chunks by cosine distance:
 
-### Public Widget & Embed System
-Customers can embed the chat assistant onto any external website with a single `<script>` tag:
+```sql
+SELECT chunk_id, content, 1 - (embedding <=> $1::vector) AS similarity
+FROM document_chunks
+WHERE company_id = $2
+ORDER BY embedding <=> $1::vector ASC
+LIMIT 5;
+```
+
+- Retrieved chunks are injected into a grounded system prompt to minimize hallucination.
+
+---
+
+## ðŸ§© Embedding the Widget
+
+Add the assistant to any external site with a single script tag:
 
 ```html
 <!-- Smart AI Chatbot Widget -->
@@ -325,54 +309,53 @@ Customers can embed the chat assistant onto any external website with a single `
 </script>
 ```
 
-- **Iframe Isolation**: The widget renders an isolated iframe (`widget.html`) with configured colors, branding, and welcome messages.
-- **Public API**: The widget queries `/api/public/widget-config/:companyId` and `/api/public/chat` with CORS enabled (`origin: '*'`) and rate limiting (`30 requests per 10 minutes per IP`).
+- Renders an isolated iframe (`widget.html`) with your configured branding, colors, and greeting.
+- Backed by `/api/public/widget-config/:companyId` and `/api/public/chat` â€” CORS-open, rate-limited to **30 requests / 10 minutes / IP**.
 
 ---
 
-## 10. Deployment
+## ðŸš€ Deployment
 
-Refer to the project configuration for hosting environments:
+### Frontend (Vercel)
+`client/vercel.json` defines SPA rewrites and widget CORS headers:
+- Root/dashboard routes rewrite to `/index.html`.
+- `/widget.js` and `/widget` set `Content-Security-Policy: frame-ancestors *` for cross-origin embedding.
+- Build command: `npm run build` Â· Output directory: `dist`
 
-### Frontend Deployment (Vercel)
-The `client/vercel.json` configuration defines SPA routing rewrites and CORS headers for widget distribution:
-- Root and dashboard routes are rewritten to `/index.html`.
-- Static assets `/widget.js` and `/widget` explicitly allow cross-origin framing (`Content-Security-Policy: frame-ancestors *`).
-- Build Command: `npm run build`
-- Output Directory: `dist`
+### Backend
+Runs in any standard Node.js container or VM (Render, Railway, AWS ECS, GCP Cloud Run, or a VPS).
 
-### Backend Deployment
-- The backend Express server is designed to run in any standard Node.js container or cloud VM environment (e.g. Render, Railway, AWS ECS, GCP Cloud Run, or VPS).
-- Ensure required environment variables (`PORT`, `DATABASE_URL`, Firebase credentials, and AI provider API keys) are configured in the host environment.
-- Run migrations and start with:
-  ```bash
-  npm run build
-  npm run start
-  ```
+```bash
+npm run build
+npm run start
+```
+
+Ensure `PORT`, `DATABASE_URL`, Firebase credentials, and AI provider keys are set in the host environment.
 
 ---
 
-## 11. Troubleshooting Guide
+## ðŸ©º Troubleshooting
 
-### 1. `Ollama embedding error (qwen3-embedding:0.6b at http://localhost:11434)`
-- **Cause**: Ollama daemon is offline, or the required embedding model has not been pulled.
-- **Resolution**:
-  1. Start Ollama: `ollama serve`
-  2. Pull the embedding model: `ollama pull qwen3-embedding:0.6b`
-  3. Pull the generation model: `ollama pull qwen3:1.7b`
-
-### 2. CORS Preflight Blocked (`No Access-Control-Allow-Origin`)
-- **Cause**: The frontend is sending requests to an endpoint that is offline, returning a 502/503 from a reverse proxy or tunnel.
-- **Resolution**: Ensure the backend server is running on the expected port (`PORT=5000`) and responding at `/api/health`.
-
-### 3. PostgreSQL / PGlite Lock Conflicts
-- **Cause**: An abrupt process termination left a stale `postmaster.pid` file in `server/data/pglite_db`.
-- **Resolution**: Stop any existing server processes. The database initialization automatically detects and recovers corrupted checkpoints, or you can remove `server/data/pglite_db/postmaster.pid` before starting.
-
-### 4. Firebase Authentication Token Issues
-- **Cause**: Missing or invalid Firebase Web configuration keys in `client/.env`.
-- **Resolution**: Verify that `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_PROJECT_ID` match your active Firebase console credentials.
+| Issue | Cause | Resolution |
+|---|---|---|
+| `Ollama embedding error (qwen3-embedding:0.6b at http://localhost:11434)` | Ollama daemon offline, or model not pulled | Run `ollama serve`, then `ollama pull qwen3-embedding:0.6b` and `ollama pull qwen3:1.7b` |
+| CORS preflight blocked (`No Access-Control-Allow-Origin`) | Backend unreachable / returning 502-503 via proxy or tunnel | Confirm the server is running on `PORT=5000` and `/api/health` responds |
+| PostgreSQL / PGlite lock conflicts | Stale `postmaster.pid` left by an abrupt process kill | Stop existing server processes; delete `server/data/pglite_db/postmaster.pid` if needed |
+| Firebase authentication errors | Missing/invalid Firebase Web config in `client/.env` | Verify `VITE_FIREBASE_API_KEY` and `VITE_FIREBASE_PROJECT_ID` match your Firebase console |
 
 ---
 
-> **Note**: This README documents the existing system implementation and does not alter application behavior, business logic, or dependencies.
+## ðŸ¤ Contributing
+
+Contributions are welcome! To propose a change:
+
+1. Fork the repository and create a feature branch.
+2. Make your changes with clear, focused commits.
+3. Run `npm run test` (server) to confirm nothing is broken.
+4. Open a pull request describing the change and motivation.
+
+---
+
+## ðŸ“„ License
+
+Distributed under the MIT License. See `LICENSE` for details.
